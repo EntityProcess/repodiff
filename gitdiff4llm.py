@@ -7,7 +7,7 @@ import argparse
 import tempfile
 
 # Tokenizer function using OpenAI's tiktoken for LLMs (GPT-3/4)
-def count_tokens(text, model):
+def count_tokens(text, model="gpt-4o"):
     encoding = tiktoken.encoding_for_model(model)
     return len(encoding.encode(text))
 
@@ -25,13 +25,16 @@ def run_git_diff(commit1, commit2, diff_options):
 
 # Function to load config (diff options and tiktoken model) from JSON config file
 def load_config(config_file_name="config.json"):
-    # First try to find the config file in the current working directory
-    config_path = os.path.join(os.getcwd(), config_file_name)
-    
-    # If not found in the working directory, try to find it in the directory of the script or executable
-    if not os.path.exists(config_path):
+    # Check if running as a PyInstaller bundle (frozen)
+    if getattr(sys, 'frozen', False):
+        # If the application is run as a PyInstaller bundle, use the _MEIPASS directory
+        script_dir = sys._MEIPASS
+    else:
+        # If running in a normal Python environment, use the script directory
         script_dir = os.path.dirname(os.path.realpath(__file__))
-        config_path = os.path.join(script_dir, config_file_name)
+    
+    # Construct the path to config.json
+    config_path = os.path.join(script_dir, config_file_name)
     
     if os.path.exists(config_path):
         try:
@@ -41,7 +44,7 @@ def load_config(config_file_name="config.json"):
             print(f"Error loading config file: {e}")
             sys.exit(1)
     else:
-        print(f"Config file '{config_file_name}' not found in working directory or script directory.")
+        print(f"Config file '{config_file_name}' not found in script directory '{script_dir}'.")
         sys.exit(1)
 
 # Function to get the latest commit hash for the current branch
@@ -126,7 +129,7 @@ if __name__ == "__main__":
         output_file = args.output_file
     else:
         temp_dir = tempfile.gettempdir()
-        output_file = os.path.join(temp_dir, "gitdiff_output.txt")
+        output_file = os.path.join(temp_dir, "gitdiff4llm", "gitdiff_output.txt")
         print(f"No output file specified. Using temporary directory: {output_file}")
 
     # Make sure the output directory exists
