@@ -1,10 +1,11 @@
 import subprocess
 import sys
 import os
+import json
 import tiktoken
 
 # Tokenizer function using OpenAI's tiktoken for LLMs (GPT-3/4)
-def count_tokens(text, model="gpt-4o"):
+def count_tokens(text, model):
     encoding = tiktoken.encoding_for_model(model)
     return len(encoding.encode(text))
 
@@ -20,29 +21,50 @@ def run_git_diff(commit1, commit2, diff_options):
         print(f"Error running git diff: {e}")
         sys.exit(1)
 
+# Function to load config (diff options and tiktoken model) from JSON config file
+def load_config(config_file_name="config.json"):
+    # First try to find the config file in the current working directory
+    config_path = os.path.join(os.getcwd(), config_file_name)
+    
+    # If not found in the working directory, try to find it in the directory of the script or executable
+    if not os.path.exists(config_path):
+        script_dir = os.path.dirname(os.path.realpath(__file__))
+        config_path = os.path.join(script_dir, config_file_name)
+    
+    if os.path.exists(config_path):
+        try:
+            with open(config_path, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        except (FileNotFoundError, json.JSONDecodeError) as e:
+            print(f"Error loading config file: {e}")
+            sys.exit(1)
+    else:
+        print(f"Config file '{config_file_name}' not found in working directory or script directory.")
+        sys.exit(1)
+
 # Main function to generate the combined diff and calculate token count
 def main(commit1, commit2, output_file):
-    # Run git diff with the first set of options
-    diff1 = run_git_diff(commit1, commit2, ["-U100", "--ignore-all-space", "--", ":!*Test*"])
+    # Load the config from the default or specified path
+    config = load_config()
     
-    # Run git diff with the second set of options for test files
-    diff2 = run_git_diff(commit1, commit2, ["-U20", "--ignore-all-space", "--", "*Test*"])
+    # Extract tiktoken model and diff configs from the config
+    tiktoken_model = config.get("tiktoken_model", "gpt-4")
+    diff_configs = config["diffs"]
     
-    # Ensure both diffs are valid strings
-    if diff1 is None:
-        diff1 = ""
-    if diff2 is None:
-        diff2 = ""
-
-    # Combine the two diffs
-    combined_diff = diff1 + "\n" + diff2
+    combined_diff = ""
+    
+    # Run git diff for each set of options and combine the results
+    for diff_options in diff_configs:
+        diff_output = run_git_diff(commit1, commit2, diff_options)
+        if diff_output:
+            combined_diff += diff_output + "\n"
     
     # Write the combined diff to the output file
     with open(output_file, 'w', encoding='utf-8') as f:
         f.write(combined_diff)
     
-    # Calculate token count using LLM tokenizer
-    token_count = count_tokens(combined_diff)
+    # Calculate token count using the tiktoken model
+    token_count = count_tokens(combined_diff, tiktoken_model)
     
     # Output results
     print(f"Combined diff written to {output_file}")
@@ -51,7 +73,7 @@ def main(commit1, commit2, output_file):
 # Entry point of the script
 if __name__ == "__main__":
     if len(sys.argv) != 4:
-        print("Usage: python gitdiff4review.py <commit1> <commit2> <output_file>")
+        print("Usage: python gitdiff4llm.py <commit1> <commit2> <output_file>")
         sys.exit(1)
 
     commit1 = sys.argv[1]

@@ -1,0 +1,8 @@
+{
+    "tiktoken_model": "gpt-4o",
+    "diffs": [
+      ["-U50", "--ignore-all-space", "--", ":!*Test*"],
+      ["-U20", "--ignore-all-space", "--", "*Test*"]
+    ]
+  }
+  
