@@ -4,6 +4,7 @@ import os
 import json
 import tiktoken
 import argparse
+import tempfile
 
 # Tokenizer function using OpenAI's tiktoken for LLMs (GPT-3/4)
 def count_tokens(text, model):
@@ -99,7 +100,7 @@ def main(commit1, commit2, output_file):
 if __name__ == "__main__":
     # Set up argument parser
     parser = argparse.ArgumentParser(description="Run git diff between two commits and analyze with LLM.")
-    parser.add_argument("-o", "--output_file", required=True, help="The file to output the combined diff.")
+    parser.add_argument("-o", "--output_file", help="The file to output the combined diff.")
     parser.add_argument("-c1", "--commit1", help="The first commit hash.")
     parser.add_argument("-c2", "--commit2", help="The second commit hash.")
     parser.add_argument("-b", "--branch", help="Compare the latest commit on the current branch to the latest common commit with another branch (e.g., master).")
@@ -120,7 +121,13 @@ if __name__ == "__main__":
         commit1 = args.commit1
         commit2 = args.commit2
 
-    output_file = args.output_file
+    # Set output file or default to the user's temporary directory
+    if args.output_file:
+        output_file = args.output_file
+    else:
+        temp_dir = tempfile.gettempdir()
+        output_file = os.path.join(temp_dir, "gitdiff_output.txt")
+        print(f"No output file specified. Using temporary directory: {output_file}")
 
     # Make sure the output directory exists
     os.makedirs(os.path.dirname(output_file), exist_ok=True)
