@@ -55,16 +55,16 @@ def get_latest_commit():
         print(f"Error getting the latest commit: {e}")
         sys.exit(1)
 
-# Function to get the latest commit hash from a specified branch
-def get_latest_commit_from_branch(branch):
+# Function to get the latest common commit between the current branch and base branch
+def get_latest_common_commit_with_branch(branch):
     try:
         result = subprocess.run(
-            ["git", "rev-parse", branch],
+            ["git", "merge-base", "HEAD", branch],
             capture_output=True, text=True, check=True, encoding='utf-8', errors='replace'
         )
         return result.stdout.strip()
     except subprocess.CalledProcessError as e:
-        print(f"Error getting the latest commit from branch '{branch}': {e}")
+        print(f"Error getting the latest common commit with '{branch}': {e}")
         sys.exit(1)
 
 # Main function to generate the combined diff and calculate token count
@@ -102,17 +102,17 @@ if __name__ == "__main__":
     parser.add_argument("-o", "--output_file", required=True, help="The file to output the combined diff.")
     parser.add_argument("-c1", "--commit1", help="The first commit hash.")
     parser.add_argument("-c2", "--commit2", help="The second commit hash.")
-    parser.add_argument("-b", "--branch", help="Compare the latest commit on the current branch to the latest commit on another branch (e.g., master).")
+    parser.add_argument("-b", "--branch", help="Compare the latest commit on the current branch to the latest common commit with another branch (e.g., master).")
 
     args = parser.parse_args()
 
     # Determine the commit hashes
     if args.branch:
-        commit1 = get_latest_commit_from_branch(args.branch)
+        commit1 = get_latest_common_commit_with_branch(args.branch)
         commit2 = get_latest_commit()
 
         # Print the commits being used for the comparison
-        print(f"Comparing latest commit from branch '{args.branch}' ({commit1[:12]}) with the latest commit on the current branch ({commit2[:12]}).")
+        print(f"Comparing latest common commit with branch '{args.branch}' ({commit1[:12]}) and the latest commit on the current branch ({commit2[:12]}).")
     else:
         if not args.commit1 or not args.commit2:
             print("You must either provide two commit hashes using --commit1 and --commit2, or use the -b option to compare against another branch.")
