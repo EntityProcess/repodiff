@@ -3,6 +3,7 @@ import sys
 import os
 import json
 import tiktoken
+import argparse
 
 # Tokenizer function using OpenAI's tiktoken for LLMs (GPT-3/4)
 def count_tokens(text, model):
@@ -42,13 +43,37 @@ def load_config(config_file_name="config.json"):
         print(f"Config file '{config_file_name}' not found in working directory or script directory.")
         sys.exit(1)
 
+# Function to get the latest commit hash for the current branch
+def get_latest_commit():
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            capture_output=True, text=True, check=True, encoding='utf-8', errors='replace'
+        )
+        return result.stdout.strip()
+    except subprocess.CalledProcessError as e:
+        print(f"Error getting the latest commit: {e}")
+        sys.exit(1)
+
+# Function to get the latest commit hash from a specified branch
+def get_latest_commit_from_branch(branch):
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", branch],
+            capture_output=True, text=True, check=True, encoding='utf-8', errors='replace'
+        )
+        return result.stdout.strip()
+    except subprocess.CalledProcessError as e:
+        print(f"Error getting the latest commit from branch '{branch}': {e}")
+        sys.exit(1)
+
 # Main function to generate the combined diff and calculate token count
 def main(commit1, commit2, output_file):
     # Load the config from the default or specified path
     config = load_config()
     
     # Extract tiktoken model and diff configs from the config
-    tiktoken_model = config.get("tiktoken_model", "gpt-4")
+    tiktoken_model = config.get("tiktoken_model", "gpt-4o")
     diff_configs = config["diffs"]
     
     combined_diff = ""
@@ -72,13 +97,30 @@ def main(commit1, commit2, output_file):
 
 # Entry point of the script
 if __name__ == "__main__":
-    if len(sys.argv) != 4:
-        print("Usage: python gitdiff4llm.py <commit1> <commit2> <output_file>")
-        sys.exit(1)
+    # Set up argument parser
+    parser = argparse.ArgumentParser(description="Run git diff between two commits and analyze with LLM.")
+    parser.add_argument("-o", "--output_file", required=True, help="The file to output the combined diff.")
+    parser.add_argument("-c1", "--commit1", help="The first commit hash.")
+    parser.add_argument("-c2", "--commit2", help="The second commit hash.")
+    parser.add_argument("-b", "--branch", help="Compare the latest commit on the current branch to the latest commit on another branch (e.g., master).")
 
-    commit1 = sys.argv[1]
-    commit2 = sys.argv[2]
-    output_file = sys.argv[3]
+    args = parser.parse_args()
+
+    # Determine the commit hashes
+    if args.branch:
+        commit1 = get_latest_commit_from_branch(args.branch)
+        commit2 = get_latest_commit()
+
+        # Print the commits being used for the comparison
+        print(f"Comparing latest commit from branch '{args.branch}' ({commit1[:12]}) with the latest commit on the current branch ({commit2[:12]}).")
+    else:
+        if not args.commit1 or not args.commit2:
+            print("You must either provide two commit hashes using --commit1 and --commit2, or use the -b option to compare against another branch.")
+            sys.exit(1)
+        commit1 = args.commit1
+        commit2 = args.commit2
+
+    output_file = args.output_file
 
     # Make sure the output directory exists
     os.makedirs(os.path.dirname(output_file), exist_ok=True)

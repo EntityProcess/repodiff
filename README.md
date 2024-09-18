@@ -7,8 +7,7 @@
 
 - Generate diffs between two commits or branches with customizable options.
 - Supports customized diff options depending on file type.
-- Automatically retrieves diffs for base and target branches from pull requests.
-- Combines diffs into a single file
+- Combines diffs into a single file.
 - Calculates token counts for estimating the query cost for LLMs.
 
 ## Usage
