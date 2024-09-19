@@ -1,8 +1,8 @@
 {
-    "tiktoken_model": "gpt-4o",
-    "diffs": [
-      ["-U50", "--ignore-all-space", "--", ":!*Test*"],
-      ["-U20", "--ignore-all-space", "--", "*Test*"]
-    ]
-  }
-  
+  "tiktoken_model": "gpt-4o",
+  "diffs": [
+    ["-U50", "--ignore-all-space", "--", "*.cs", ":!*Test*.cs", ":!*.xml"],
+    ["-U20", "--ignore-all-space", "--", "*Test*.cs", ":!*.xml"],
+    ["-U5", "--ignore-all-space", "--", "*.xml"]
+  ]
+}

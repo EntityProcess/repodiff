@@ -28,7 +28,7 @@ def load_config(config_file_name="config.json"):
     # Check if running as a PyInstaller bundle (frozen)
     if getattr(sys, 'frozen', False):
         # If the application is run as a PyInstaller bundle, use the _MEIPASS directory
-        script_dir = sys._MEIPASS
+        script_dir = os.path.dirname(sys.executable)
     else:
         # If running in a normal Python environment, use the script directory
         script_dir = os.path.dirname(os.path.realpath(__file__))
