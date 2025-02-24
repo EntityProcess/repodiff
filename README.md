@@ -1,7 +1,7 @@
 
 # RepoDiff
 
-**RepoDiff** is a tool designed to simplify code reviews by generating comprehensive git diffs between two commits or branches. It allows you to configure diff options based on file paths, optimizing the output for consumption by large language models (LLMs).
+**RepoDiff** is a tool designed to simplify code reviews by generating dynamic git diffs between two commits or branches. It allows you to configure diff options based on file paths, optimizing the output for consumption by large language models (LLMs).
 
 ## Features
 
