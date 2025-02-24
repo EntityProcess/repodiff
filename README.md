@@ -1,7 +1,7 @@
 
-# GitDiff4LLM
+# RepoDiff
 
-**GitDiff4LLM** is a tool designed to simplify code reviews by generating comprehensive git diffs between two commits or branches. It allows you to configure diff options based on file paths, optimizing the output for consumption by large language models (LLMs).
+**RepoDiff** is a tool designed to simplify code reviews by generating comprehensive git diffs between two commits or branches. It allows you to configure diff options based on file paths, optimizing the output for consumption by large language models (LLMs).
 
 ## Features
 
@@ -18,20 +18,20 @@ You can either provide commit hashes to compare directly, or use the -b option t
 
 To compare the latest commit in the current branch with the latest common commit in another branch (e.g., `master`), use the `-b` option:
 ```bash
-gitdiff4llm -b <branch> [-o /path/to/output_file.txt]
+repodiff -b <branch> [-o /path/to/output_file.txt]
 ```
 
 **Example:** 
 Compare the latest commit in the current branch with the latest common commit in master, and write the result to a default file in the system's temporary directory
 
 ```bash
-gitdiff4llm -b master
+repodiff -b master
 ```
 
 ### Compare Two Commits
 
 ```bash
-gitdiff4llm -c1 <commit1> -c2 <commit2> [-o /path/to/output_file.txt]
+repodiff -c1 <commit1> -c2 <commit2> [-o /path/to/output_file.txt]
 ```
 
 * `-c1`, `--commit1`: First commit hash.
@@ -77,17 +77,17 @@ This setup means:
 
 ### Option 1: Download the Executable
 
-1. Go to the [Releases](https://github.com/EntityProcess/GitDiff4LLM/releases) page.
-2. Download the latest version of the `gitdiff4llm.exe` executable.
-3. Move the `gitdiff4llm.exe` file to a directory included in your system's `PATH`.
+1. Go to the [Releases](https://github.com/EntityProcess/RepoDiff/releases) page.
+2. Download the latest version of the `repodiff.exe` executable.
+3. Move the `repodiff.exe` file to a directory included in your system's `PATH`.
 
 ### Option 2: Build the Executable Yourself
 
 Clone the repository and navigate to the directory:
 
 ```bash
-git clone https://github.com/EntityProcess/GitDiff4LLM.git
-cd GitDiff4LLM
+git clone https://github.com/EntityProcess/RepoDiff.git
+cd RepoDiff
 ```
 
 Install PyInstaller by running the following command:
@@ -98,7 +98,7 @@ pip install pyinstaller
 
 Generate the executable by running `build.bat`.
 
-Add `./GitDiff4LLM/dist` to your `PATH` environmental variable.
+Add `./RepoDiff/dist` to your `PATH` environmental variable.
 
 ## Contributing
 

@@ -129,7 +129,7 @@ if __name__ == "__main__":
         output_file = args.output_file
     else:
         temp_dir = tempfile.gettempdir()
-        output_file = os.path.join(temp_dir, "gitdiff4llm", "gitdiff_output.txt")
+        output_file = os.path.join(temp_dir, "repodiff", "repodiff_output.txt")
         print(f"No output file specified. Using temporary directory: {output_file}")
 
     # Make sure the output directory exists
