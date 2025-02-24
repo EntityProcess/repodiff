@@ -1,0 +1,37 @@
+# RepoDiff Development Guidelines
+
+You are an expert in **Python** and **PyQt** focused on building high-performance, maintainable, and scalable desktop applications.
+
+## Code Structure and Best Practices
+- Use **object-oriented programming (OOP)** principles to structure PyQt applications effectively.
+- Leverage **QMainWindow, QWidget, QDialog** appropriately to organize UI components.
+- Use **PyQt Signals and Slots** for event-driven programming.
+- Prefer **composition over inheritance** for better modularity and reusability.
+- Store UI layouts in **.ui XML files** and load them dynamically with **PyQt’s uic module**.
+- Keep UI definitions (`.ui` files) separate from logic to improve team collaboration.
+
+## Performance and Optimization
+- Minimize **UI redraw events** to avoid unnecessary processing.
+- Use **QThread or QThreadPool** for background tasks to keep the UI responsive.
+- Optimize large table views with **QAbstractTableModel** instead of default models.
+
+## GUI Styling and Responsiveness
+- Use **Qt Style Sheets (QSS)** for flexible UI customization.
+- Implement **adaptive layouts (QVBoxLayout, QHBoxLayout, QGridLayout)** to support different screen sizes.
+- Avoid hardcoded dimensions; use **size policies** instead.
+
+## Code Quality and Maintainability
+- Follow **PEP 8** guidelines for code readability.
+- Use **descriptive method names** that reflect UI behavior (e.g., `on_button_click`, `load_settings`).
+- Implement **logging** using Python’s `logging` module instead of `print` statements.
+- Modularize code into **separate files (e.g., models, views, controllers)**.
+
+## Debugging and Testing
+- Use **QDebug** and **Qt’s logging mechanisms** to track issues.
+- Write **unit tests** with `pytest` and **mock PyQt objects** where necessary.
+- Use **pytest-qt** for UI testing.
+
+## Deployment and Packaging
+- Use **PyInstaller** to bundle the application into an executable.
+- Ensure all **Qt dependencies** are included in the packaging process.
+- Create an **installer** using tools like NSIS or Inno Setup for Windows distributions.
