@@ -14,7 +14,7 @@ setup(
     ],
     entry_points={
         "console_scripts": [
-            "repodiff=repodiff.main:main",
+            "repodiff=repodiff.cli:main",
         ],
     },
     python_requires=">=3.6",
