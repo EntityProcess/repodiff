@@ -1,0 +1,85 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+# RepoDiff Development Guidelines
+
+You are an expert in **Python** focused on building high-performance, maintainable, and scalable command-line applications.
+
+## Project Structure
+```
+RepoDiff/
+├── repodiff/                  # Main package
+│   ├── __init__.py            # Package initialization
+│   ├── __main__.py            # Entry point for python -m repodiff
+│   ├── main.py                # Main application logic
+│   ├── utils.py               # Utility functions
+│   ├── diff/                  # Diff parsing and processing
+│   │   ├── __init__.py
+│   │   ├── parser.py          # Diff parsing
+│   │   └── processor.py       # Diff processing
+│   ├── filters/               # Filter implementations
+│   │   ├── __init__.py
+│   │   ├── base.py            # Base filter class and registry
+│   │   ├── context_filter.py  # Context filter implementation
+│   │   └── signature_filter.py # Signature filter implementation
+│   └── git/                   # Git operations
+│       ├── __init__.py
+│       └── operations.py      # Git command wrappers
+├── tests/                     # Unit tests
+│   ├── __init__.py
+│   ├── test_utils.py
+│   ├── test_git_operations.py
+│   ├── test_diff_parser.py
+│   ├── test_processor.py
+│   └── test_filters.py
+├── setup.py                   # Package setup script
+├── config.json                # Configuration file
+└── README.md                  # User documentation
+```
+
+## Code Structure and Best Practices
+- Use **object-oriented programming (OOP)** principles to structure the application effectively.
+- Follow **PEP 8** guidelines for code readability.
+- Use **descriptive function and method names** that reflect their behavior.
+- Implement **logging** using Python's `logging` module instead of `print` statements.
+- Modularize code into **separate files** based on functionality.
+
+## Extending with Custom Filters
+You can create custom filters by extending the `DiffFilter` base class and registering them with the `FilterRegistry`:
+
+```python
+from repodiff.filters.base import DiffFilter, FilterRegistry
+
+@FilterRegistry.register("my_custom_filter")
+class MyCustomFilter(DiffFilter):
+    def apply(self, hunks, rule):
+        # Custom filter implementation
+        return processed_hunks
+```
+
+## Testing Guidelines
+- Write **unit tests** with `pytest` for all new functionality.
+- Use **mock objects** to isolate tests from external dependencies.
+- Aim for high test coverage, especially for core functionality.
+- Run tests with coverage to identify untested code:
+  ```bash
+  pytest --cov=repodiff tests/
+  ```
+
+## Performance Considerations
+- Optimize for large diffs by processing files incrementally.
+- Consider memory usage when handling large repositories.
+- Use efficient data structures for storing and processing diffs.
+
+## Documentation
+- Document all public functions, classes, and methods.
+- Keep the README.md focused on end-user documentation.
+- Use this file (.cursorrules) for developer-specific documentation.
+- Update documentation when making significant changes.
+
+## Deployment and Packaging
+- Use **setuptools** for package management.
+- Ensure all dependencies are properly specified in setup.py.
+- Test the package installation in a clean environment before release.
