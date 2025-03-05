@@ -1,85 +1,120 @@
 ---
-description: 
+description: general
 globs: 
 alwaysApply: false
 ---
 # RepoDiff Development Guidelines
 
-You are an expert in **Python** focused on building high-performance, maintainable, and scalable command-line applications.
+You are an expert in **Rust** focused on building high-performance, maintainable, and scalable command-line applications.
 
 ## Project Structure
 ```
 RepoDiff/
-├── repodiff/                  # Main package
-│   ├── __init__.py            # Package initialization
-│   ├── __main__.py            # Entry point for python -m repodiff
-│   ├── main.py                # Main application logic
-│   ├── utils.py               # Utility functions
-│   ├── diff/                  # Diff parsing and processing
-│   │   ├── __init__.py
-│   │   ├── parser.py          # Diff parsing
-│   │   └── processor.py       # Diff processing
-│   ├── filters/               # Filter implementations
-│   │   ├── __init__.py
-│   │   ├── base.py            # Base filter class and registry
-│   │   ├── context_filter.py  # Context filter implementation
-│   │   └── signature_filter.py # Signature filter implementation
-│   └── git/                   # Git operations
-│       ├── __init__.py
-│       └── operations.py      # Git command wrappers
-├── tests/                     # Unit tests
-│   ├── __init__.py
-│   ├── test_utils.py
-│   ├── test_git_operations.py
-│   ├── test_diff_parser.py
-│   ├── test_processor.py
-│   └── test_filters.py
-├── setup.py                   # Package setup script
-├── config.json                # Configuration file
-└── README.md                  # User documentation
+├── src/                      # Main source code
+│   ├── main.rs               # Entry point
+│   ├── lib.rs                # Library interface
+│   ├── error.rs              # Error types
+│   ├── repodiff.rs           # Core application logic
+│   └── utils/                # Utility modules
+│       ├── mod.rs            # Module declarations
+│       ├── diff_parser.rs    # Diff parsing
+│       ├── token_counter.rs  # Token counting
+│       └── git_operations.rs # Git operations
+├── tests/                    # Integration tests
+│   ├── diff_parser_test.rs
+│   └── git_operations_test.rs
+├── Cargo.toml                # Package manifest
+├── config.json               # Configuration file
+└── README.md                 # User documentation
 ```
 
 ## Code Structure and Best Practices
-- Use **object-oriented programming (OOP)** principles to structure the application effectively.
-- Follow **PEP 8** guidelines for code readability.
-- Use **descriptive function and method names** that reflect their behavior.
-- Implement **logging** using Python's `logging` module instead of `print` statements.
-- Modularize code into **separate files** based on functionality.
+- Use **Rust's ownership and borrowing** rules effectively
+- Follow **Rust's naming conventions** (snake_case for functions, PascalCase for types)
+- Implement proper **error handling** using `Result` and custom error types
+- Use **structs and traits** to organize code effectively
+- Leverage Rust's **type system** for safety and correctness
 
-## Extending with Custom Filters
-You can create custom filters by extending the `DiffFilter` base class and registering them with the `FilterRegistry`:
+## Current Issues to Address
+The following unused fields have been identified and should be addressed:
 
-```python
-from repodiff.filters.base import DiffFilter, FilterRegistry
+1. In `TokenCounter`:
+   ```rust
+   pub struct TokenCounter {
+       model: String,  // Currently unused
+   }
+   ```
+   - Either implement functionality using this field or remove it
 
-@FilterRegistry.register("my_custom_filter")
-class MyCustomFilter(DiffFilter):
-    def apply(self, hunks, rule):
-        # Custom filter implementation
-        return processed_hunks
-```
+2. In `RepoDiff`:
+   ```rust
+   pub struct RepoDiff {
+       config_manager: ConfigManager,  // Currently unused
+   }
+   ```
+   - Implement configuration management or remove if not needed
+
+3. In `RepoDiffError`:
+   ```rust
+   pub enum RepoDiffError {
+       GeneralError(String),  // Never constructed
+   }
+   ```
+   - Remove if not needed or implement where appropriate
+
+4. In `Hunk`:
+   ```rust
+   pub struct Hunk {
+       pub header: String,
+       pub old_start: usize,
+       pub old_count: usize,
+       pub new_start: usize,
+       pub new_count: usize,
+   }
+   ```
+   - Implement functionality using these fields or remove if not needed
 
 ## Testing Guidelines
-- Write **unit tests** with `pytest` for all new functionality.
-- Use **mock objects** to isolate tests from external dependencies.
-- Aim for high test coverage, especially for core functionality.
-- Run tests with coverage to identify untested code:
+- Write **unit tests** within source files using `#[cfg(test)]`
+- Create **integration tests** in the `tests/` directory
+- Use `cargo test` to run the test suite
+- Aim for high test coverage, especially for core functionality
+- Run tests with:
   ```bash
-  pytest --cov=repodiff tests/
+  cargo test
   ```
 
 ## Performance Considerations
-- Optimize for large diffs by processing files incrementally.
-- Consider memory usage when handling large repositories.
-- Use efficient data structures for storing and processing diffs.
+- Leverage Rust's **zero-cost abstractions**
+- Use efficient data structures from the standard library
+- Consider memory usage when handling large repositories
+- Profile code using Rust's built-in tools when needed
 
 ## Documentation
-- Document all public functions, classes, and methods.
-- Keep the README.md focused on end-user documentation.
-- Use this file (.cursorrules) for developer-specific documentation.
-- Update documentation when making significant changes.
+- Use **rustdoc** comments (`///`) for public items
+- Keep the README.md focused on end-user documentation
+- Use this file for developer-specific documentation
+- Run `cargo doc` to generate documentation
 
-## Deployment and Packaging
-- Use **setuptools** for package management.
-- Ensure all dependencies are properly specified in setup.py.
-- Test the package installation in a clean environment before release.
+## Building and Packaging
+- Use **Cargo** for package management
+- Ensure all dependencies are properly specified in Cargo.toml
+- Test the package in release mode before deployment:
+  ```bash
+  cargo build --release
+  ```
+
+## Dependency Management
+Current dependencies (as of v0.3.0):
+```toml
+clap = { version = "4.5.1", features = ["derive"] }
+serde = { version = "1.0.197", features = ["derive"] }
+serde_json = "1.0.114"
+regex = "1.10.3"
+tempfile = "3.10.0"
+tiktoken-rs = "0.5.8"
+fnmatch-regex = "0.2.0"
+thiserror = "1.0.57"
+```
+
+Keep dependencies up to date and review for security updates regularly. 

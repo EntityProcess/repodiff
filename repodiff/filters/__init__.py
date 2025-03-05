@@ -1,3 +1,0 @@
-"""
-Filter modules for RepoDiff.
-""" 
