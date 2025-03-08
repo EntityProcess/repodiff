@@ -69,11 +69,16 @@ fn test_get_filters_default() {
 }
 
 #[test]
-#[should_panic(expected = "system cannot find the path specified")]
 fn test_load_config_file_not_found() {
     // Try to create a ConfigManager with a non-existent file
     let non_existent_path = "/path/to/nonexistent/config.json";
-    let _ = ConfigManager::new(non_existent_path).unwrap();
+    let config_manager = ConfigManager::new(non_existent_path).unwrap();
+    
+    // Verify that we get the default configuration
+    assert_eq!(config_manager.get_tiktoken_model(), "gpt-4o");
+    assert_eq!(config_manager.get_filters().len(), 1);
+    assert_eq!(config_manager.get_filters()[0].file_pattern, "*");
+    assert_eq!(config_manager.get_filters()[0].context_lines, 3);
 }
 
 #[test]
