@@ -2,34 +2,42 @@
 
 ## 1. Overview
 
-The goal is to **simplify** RepoDiff by performing a **single** `git diff` command that captures all changed files. Post-processing will then apply user-defined rules (like ignoring bodies of methods far from the changed lines). This approach eliminates the need for multiple Git calls or complex exclude patterns.
+RepoDiff generates a simplified and context-aware unified diff of a Git repository, designed for code reviews and Large Language Model (LLM) analysis. It performs a **single** `git diff` command to capture all changed files and then post-processes the output in Rust to apply user-defined rules. This approach avoids multiple Git calls and complex exclude patterns. The key feature is flexible handling of C# files, offering both detailed change context and API surface views.
 
 ## 2. Key Objectives
 
-1. Generate one **unified diff** that covers all changed files in a **single pass**.
-2. **Post-process** that diff in Rust to apply user-defined patterns, supporting two main modes for C# (`*.cs`) files:
-   - **API Signature Mode:** Focus on capturing the API surface. Include namespace, class, method, and property signatures for C# files. Method bodies are generally omitted or truncated (controlled by `method_body_threshold`). Useful for high-level API reviews. Configured using `api_signature_mode: true`.
-   - **Change Context Mode:** Focus on providing detailed context for code changes within C# methods. Include the full body of the C# method containing a diff, along with surrounding namespace and class signatures and signatures of other methods within the `context_lines` range. Useful for in-depth code review of specific changes. Configured using `include_method_body: true` and `include_signatures: true`.
-3. Provide **user-friendly** output with placeholders (e.g., `{ ... }`) to indicate omitted method bodies and instructional headers explaining these conventions.
+1.  **Single-Pass Diff:** Generate one unified diff covering all changed files in a single `git diff` operation.
+2.  **Post-Processing (Rust):** Apply user-defined rules to the diff output, focusing on two primary modes for C# files (with a combined mode option):
+    *   **Change Context Mode:** Prioritizes detailed context *around* code changes within C# methods. Includes the full body of changed methods, surrounding signatures, and contextual lines.
+    *   **API Signature Mode:** Focuses on extracting the API surface (namespace, class, method, and property signatures) of C# files. Method bodies are generally truncated or omitted.
+    *   **Combined Mode:** Layers API Signature Mode *on top of* Change Context Mode, providing detailed change context *and* a broader API overview.
+3.  **User-Friendly Output:** Generate a valid unified diff with clear placeholders (e.g., `{ ... }`) indicating omitted code sections and an instructional header explaining the conventions.
+4. **Configurable**: Allow users to set the config via a json file.
 
 ## 3. Example Configuration
+
 ```json
 {
   "tiktoken_model": "gpt-4o",
   "filters": [
-    // Example of API Signature Mode (Rule 1)
-    {
-      "file_pattern": "*.cs",
-      "api_signature_mode": true,
-      "method_body_threshold": 10 // Include method bodies up to 10 lines, truncate longer ones
-      // context_lines is less relevant in this mode, but can be included for minimal surrounding context
-    },
-    // Example of Change Context Mode (Rule 2)
     {
       "file_pattern": "*.cs",
       "include_method_body": true,
       "include_signatures": true,
-      "context_lines": 3 // Provide context around the changed method and include nearby signatures
+      "context_lines": 3,
+      "api_signature_mode": true, // Enables combined mode
+      "api_signature_method_body_lines": 10 // Lines to keep in API mode & surrounding methods
+    },
+    {
+      "file_pattern": "*.cs", //Example of pure Change Context Mode
+      "include_method_body": true,
+      "include_signatures": true,
+      "context_lines": 5
+    },
+    {
+      "file_pattern": "*.cs", // Example of pure API Signature Mode
+      "api_signature_mode": true,
+      "api_signature_method_body_lines": 5
     },
     {
       "file_pattern": "*.py",
@@ -40,152 +48,230 @@ The goal is to **simplify** RepoDiff by performing a **single** `git diff` comma
 ```
 
 ## 4. Single-Pass Approach
-1. **Collect All Changes**: Perform one `git diff` for the relevant commits or branches, capturing all changed files (e.g., `git diff commit1 commit2 --unified=999999`).
-2. **Parse the Unified Diff**: Use Rust to parse each file's changed lines, hunks, and contextual lines.
-3. **Apply Filters**: For each file, determine which config pattern applies and apply the appropriate rule.
-4. **Finalize Output**: Reconstruct a single unified diff in memory or produce a custom output where method bodies are replaced with `{ ... }`.
 
-## 5. Handling C# Files - Two Modes
+1.  **Collect All Changes:** Execute a single `git diff` command for the specified commits or branches (e.g., `git diff commit1 commit2 --unified=999999`).  The large `--unified` value ensures we capture sufficient context initially.
+2.  **Parse the Unified Diff:** Use a Rust library (likely with Tree-sitter for C# parsing) to parse the diff output into a structured representation (e.g., a dictionary of files and hunks).
+3.  **Apply Filters:** Iterate through the parsed files and hunks. For each file, determine the matching configuration filter and apply the corresponding rules (Change Context, API Signature, or Combined).
+4.  **Reconstruct the Diff:** Generate the final, modified unified diff output. Adjust hunk headers and line numbers to reflect any changes made during post-processing (e.g., replacing method bodies with `{ ... }`).
 
-This feature provides two distinct modes for handling C# (`*.cs`) files, selectable via configuration filters:
+## 5. Handling C# Files - Modes
 
-### 5.1 API Signature Mode (`api_signature_mode: true`) - Rule 1
+This section details the different modes for processing C# (`*.cs`) files.
 
-* **Purpose:** To extract and present the API surface of C# files, focusing on signatures and structure.
-* **Behavior:**
-    1. **Signatures Included:** Always includes namespace, class, method, and property signatures.
-    2. **Method Body Handling:**
-       - Method bodies are generally truncated or omitted to emphasize signatures.
-       - The `method_body_threshold` setting controls the maximum number of lines to include from a method body. If a body is shorter than or equal to the threshold, it's included in full. If longer, it's truncated, and the body is replaced with `{ ... }` after the initial lines (if any are kept).
-    3. **`context_lines`:** If specified, `context_lines` provides a minimal amount of context *around* the namespace, class, and method signatures in the output. It might ensure at least `context_lines` are included around diff locations, potentially extending beyond just signatures.
-    4. **Use Case:**  Ideal for high-level reviews, understanding API changes, or feeding LLMs that need to understand API structure without excessive implementation details.
+### 5.1 API Signature Mode (`api_signature_mode: true`, `api_signature_method_body_lines`: Optional)
 
-### 5.2 Change Context Mode (`include_method_body: true`, `include_signatures: true`) - Rule 2
+*   **Purpose:** To extract and present the API surface of C# files, focusing on structure and signatures.  Implementation details are minimized.
 
-*   **Purpose:** To provide comprehensive context for code changes within C# methods, enabling detailed code reviews. This mode shows the *entire* body of any method containing a change, along with surrounding structural information.
+*   **Behavior:**
+
+    1.  **Signatures Included:** Always include the *declaration lines* for namespaces, classes, methods, and properties.
+    2.  **Method Body Handling:**
+        *   Method bodies are generally truncated or omitted.
+        *   The `api_signature_method_body_lines` setting (if present) controls the maximum number of lines to include from the *beginning* of a method body.  If a body is shorter than or equal to this value, it's included. If longer, it's truncated, and the rest of the body is replaced with `{ ... }`. If `api_signature_method_body_lines` is not provided, then omit the method bodies entirely.
+    3.  **`context_lines`:**  Provides a *minimal* amount of context *around* the included signatures. It might ensure that at least `context_lines` are present around diff locations. It does *not* significantly expand the output.
+
+*   **Use Case:** Ideal for high-level API reviews, understanding structural changes, or for LLMs that need API information without implementation details.
+
+### 5.2 Change Context Mode (`include_method_body: true`, `include_signatures: true`)
+
+*   **Purpose:** To provide comprehensive context for code changes *within* C# methods, enabling detailed code reviews.
 
 *   **Key Terms:**
 
-    *   **Changed Method:** A method whose body (the code between the opening `{` and closing `}`) contains at least one line that appears in a diff hunk.
-    *   **Diff Hunk:** A section of the unified diff output that indicates a change.  It starts with a line like `@@ -10,5 +10,6 @@` and includes lines that were added, removed, or are context lines.
-    *   **Method Signature:** The line that declares a method, including access modifiers (e.g., `public`, `private`), return type, method name, and parameters.  Example: `public int CalculateSum(int a, int b)`.
-    *   **Context Range:**  A range of lines calculated around a changed method.  It's used to determine which other method signatures (and potentially other lines of code) should be included for context.
-    *  **Contextual Method:**  A method *other than* the changed method, whose signature falls within the context range of the changed method.
-    *   **Nested Structures:**  Structures like methods within methods (lambdas or local functions), or classes within classes.
+    *   **Changed Method:** A method whose body (between `{` and `}`) contains at least one line from a diff hunk.
+    *   **Diff Hunk:** A section of the unified diff output indicating a change (starts with `@@ ... @@`).
+    *   **Method Signature:** The line declaring a method (e.g., `public int Foo(int x)`).
+    *   **Context Range:** A range of lines around a changed method: `method_signature_start_line - context_lines` to `method_body_end_line + context_lines`.
+    *   **Contextual Method:** A method *other than* the changed method whose signature falls within the context range.
+    *   **Nested Structures:** Methods within methods (lambdas, local functions), or classes within classes.
 
-*   **Behavior (Step-by-Step Instructions):**
+*   **Behavior:**
 
-    1.  **Identify Changed Methods:**
-        *   Parse the unified diff output (from `git diff`) to find all diff hunks.
-        *   For each diff hunk, examine the changed lines (those starting with `+` or `-`).
-        *   Use a C# parser (strongly recommended: Tree-sitter with the `tree-sitter-c-sharp` grammar) to determine if these changed lines fall within the body of a C# method.  If a parser is unavailable, approximate method starts by looking for lines matching patterns like `[access_modifier] [return_type] method_name {`.  This fallback is less reliable.  Focus on *structural* parsing (identifying namespaces, classes, methods, and their boundaries); you don't need to fully parse the *contents* of method bodies for this mode.
-        *   If a diff hunk touches a method's body, that method is a "changed method."
-
-    2.  **Include Full Changed Method Body:**
-        *   For *each* changed method:
-            *   Use the parser to find the *entire* body of the method (from the opening `{` to the closing `}`).
-            *   Include the *entire* method body in the output, *regardless* of the `context_lines` setting.  Do *not* truncate it.
-            *   If a method contains *multiple* diff hunks, include the full body *only once*.
-
-    3.  **Include Namespace and Class Signatures:**
-        *   Use the parser to find the namespace and class *declaration lines* that *directly* enclose the changed method. This means the lines that *declare* the namespace and class, typically starting with `namespace` and `class` (or `struct`, `interface`, `enum`, etc., if applicable).
-        *   Include *only these declaration lines* in the output.  You *do not* need to include other members of the class or namespace (such as fields, properties, or methods that are *not* within the calculated context range of the changed method).  We are only interested in the lines that *define* the enclosing namespace and class.
-
-    4.  **Calculate the Context Range:**
-        *   Use the parser to find the line number of the *start* of the changed method's signature (the method declaration line) and the line number of the *end* of the method's body (the closing `}`).
-        *   The context range is calculated as: `method_start_line - context_lines` to `method_end_line + context_lines`.  This includes the entire changed method and extends `context_lines` above and below.
-
-    5.  **Include Contextual Method Signatures:**
-        *   Examine all *other* methods within the *same* class as the changed method.
-        *   For each of these other methods:
-            *   Use the parser to get the line number of the method's *signature*.
-            *   If the signature's line number falls *within* the calculated context range (from step 4), include that method's *signature* in the output.
-            *   Replace the *body* of these contextual methods with `{ ... }`.  This is a placeholder; it's *not* valid C# code.
-
+    1.  **Identify Changed Methods:** Use a C# parser (Tree-sitter with `tree-sitter-c-sharp` is strongly recommended) to identify methods containing changed lines.
+    2.  **Include Full Changed Method Body:** For *each* changed method, include its *entire* body in the output. Do *not* truncate it.
+    3.  **Include Namespace and Class Signatures:** Include the *declaration lines* of the namespace and class that *directly* enclose the changed method. Do *not* include other members of the class/namespace unless they fall within the context range (see point 7).
+    4.  **Calculate the Context Range:**  For each changed method, calculate the context range (see "Key Terms").
+    5.  **Include Contextual Method Signatures:** If `include_signatures` is true, include the *signatures* of other methods within the same class whose signatures fall within the calculated context range. Replace the *bodies* of these contextual methods with `{ ... }`.
     6.  **Handle Nested Structures:**
-        *   **Nested Methods/Lambdas:** Treat any code inside a method (including lambdas, local functions, or anonymous methods) as part of the *enclosing* method's body. Do *not* treat them as separate methods for the purpose of this mode.
-        * **Nested Classes:** A class *within* a class *is treated as a separate class*. If a nested class contain a changed method, the full body of the method and *signature* of the *nested* class are included in the output.
+        *   Nested methods/lambdas: Treat as part of the enclosing method's body.
+        *   Nested classes: Treat as separate classes.
+    7.  **Handle Code Outside of Methods (Within the Context Range) - Point 7 (See Below):**  Address "other code" (comments, using directives, etc.) as described in the dedicated section.
+    8. **Output Format**: Ensure that the result remains a valid unified diff.
 
-    7.   **Handle Other Code Within the Context Range:**
-        * Any other code in the files (besides method bodies) should be treated as per a normal "context diff," following the `context_lines` parameter.
+*   **`context_lines` Role:** Defines the range for including contextual method signatures and "other code" around changed methods. It does *not* affect the inclusion of the full changed method body.
 
-    8.  **Output Format (Valid Unified Diff):**
-        *   The final output *must* be a valid unified diff.  This means:
-            *   The file header (`--- a/file.cs` and `+++ b/file.cs`) must be correct.
-            *   Hunk headers (e.g., `@@ -10,5 +12,3 @@`) must be adjusted to reflect the changes you've made (including lines, removing lines, and replacing bodies with `{ ... }`).  The line numbers in the hunk headers must be accurate for the *modified* file content.
-            *   Lines that are unchanged (context lines) should start with a space.
-            *   Lines that are added should start with a `+`.
-            *   Lines that are removed should start with a `-`.
+*   **Use Case:** Ideal for in-depth code reviews where understanding the full context of a change is paramount.
 
-*   **`context_lines` Role:**
+### 5.3 Combined Mode (`api_signature_mode: true`, `include_method_body: true`, `include_signatures: true`, `api_signature_method_body_lines`: Optional)
 
-    *   Defines the context range around the changed method.
-    *   Determines which *other* method signatures are included.
-    *   Provides additional lines of code *outside* of methods (within the class or namespace) that fall within the context range.
-    *   **Crucially, `context_lines` does *not* truncate the body of the method containing the diff when `include_method_body: true`.**
+*   **Purpose:** Combines the features of Change Context Mode and API Signature Mode to provide both detailed change context *and* a broader view of the API surface.
 
-*   **Use Case:** Ideal for detailed code reviews where understanding the full context of a method change is crucial. Provides enough surrounding code (signatures and some contextual lines) to understand the change's impact and purpose.
+*   **Behavior:** This mode layers API Signature Mode *on top of* Change Context Mode.
 
-### 5.2.4 Edge Cases
-To ensure consistent behavior, handle these scenarios as follows:
+    1.  **Changed Methods:** The `include_method_body: true` setting takes the highest precedence.  If a method is changed, its *entire* body is included.
+    2.  **Context Range:** The `context_lines` setting defines the region around changed methods to identify "surrounding methods."
+    3.  **Surrounding Methods (Within `context_lines`):**
+        *   Include the *signatures* of these methods (due to `include_signatures: true`).
+        *   Include up to `api_signature_method_body_lines` lines from the *beginning* of their bodies. Truncate longer bodies and replace the remainder with `{ ... }`.
+    4.  **Non-Surrounding Methods (Outside `context_lines`):**
+         *   Include the *signatures* of these methods (due to `include_signatures: true` and `api_signature_mode: true`).
+         *   Include up to `api_signature_method_body_lines` lines from the *beginning* of their bodies. Truncate longer bodies and replace the remainder with `{ ... }`.
+    5.   **Namespace and Class Declarations:** Include the declaration lines for namespaces and classes (due to `api_signature_mode: true`).
+    6.  **"Other Code" (Point 7):** Handle code outside of methods based on `context_lines` and standard diff rules.
 
-*   **Namespace Change:**
-    *   If the diff is in a namespace declaration (e.g., a rename), include the *changed line* and the surrounding `context_lines`.  Do *not* include all affected classes—just provide enough context to understand the rename.
-    *   Example: For `namespace OldName` -> `namespace NewName` with `context_lines: 3`, show the namespace line and 3 lines after (e.g., the class declaration).
+* **Precedence**
+    1. `include_method_body`
+    2. `context_lines`
+    3. Surrounding Methods
+    4. Non-Surrounding Methods
+    5. `api_signature_mode`
+    6. Other Code
 
-*   **Abstract Method:**
-    *   If the diff is in an abstract method (e.g., `public abstract void DoWork();`), include the full signature (the single line) as the "method body". Apply `context_lines` around this signature.
-    *   Example: For a renamed abstract method with `context_lines: 2`, show the signature and 2 lines above/below.
+### 5.4 Edge Cases (for all C# modes)
 
-* **Nested Class:**
-  * If the change occurs within a method of a nested class, include the full body of that method along with the signature of the nested class itself.
-  * The outer (containing) class's signature should only be included if it falls within the calculated `context_lines` range relative to the changed method within the nested class.
-  * *Example*: If you have a change in a method inside a nested class and context_lines is set to 2, the output will include: the full body of the changed method, the signature of the nested class, and up to 2 lines before the start of the method signature and up to 2 lines after the end of the method body (from the outer context).
+*   **Namespace Change:** Include the changed namespace declaration line and surrounding `context_lines`.
+*   **Abstract Method:** Include the full signature as the "method body" and apply `context_lines` around it.
+*   **Nested Class:** Treat a nested class as a separate class. If it has a changed method, include the method's body and the nested class's signature.
 
-## 6. Additional Instructions in Output
-Include a **header** in the final diff explaining placeholders:
+## 6. Handle Code Outside of Methods (Within the Context Range) - Point 7
+
+*   **Purpose:** This rule describes how to handle code that's *not* part of a method body and *not* the main namespace/class declaration (e.g., comments, `using` directives, field declarations).
+
+*   **How it Works:**
+
+    1.  **Identify "Other Code":** Any lines *not* within a method's `{` and `}` and *not* namespace/class declaration lines.
+    2.  **Check Context Range:** Determine if the line number of the "other code" falls within the context range of a *changed method*.
+    3.  **Apply Standard Diff Context Rules:**
+        *   **Changed Lines:** Include if changed (marked with `+` or `-`).
+        *   **Unchanged Lines (Within Context):** Include as a context line (prefixed with a space) if within the context range.
+        *   **Unchanged Lines (Outside Context):** Omit.
+
+## 7. Additional Instructions in Output
+
+Include a header in the final diff explaining placeholders:
 
 ```
 NOTE: Some method bodies have been replaced with "{ ... }" to improve clarity for code reviews and LLM analysis.
 
 - In API Signature Mode (api_signature_mode: true), most method bodies are intentionally omitted or truncated, focusing on API signatures.
-- In Change Context Mode (include_method_body: true), the entire method containing the diff is included to provide full context.  Signatures of other methods within the context range are also included, but their bodies are replaced with "{ ... }". The "{ ... }" placeholder indicates that a method body has been omitted for brevity.
+- In Change Context Mode (include_method_body: true), the entire method containing the diff is included.
+- In Combined Mode, the entire method containing the diff is included.  Signatures of other methods are also included. Bodies of methods outside the changed method are truncated based on api_signature_method_body_lines.
+- The "{ ... }" placeholder indicates that a method body has been omitted or truncated.
 ```
 
-## 7. Pseudocode (Rust)
+## 8. Pseudocode (Rust - Illustrative)
+
 ```rust
+// Simplified and illustrative - not a complete implementation
+
 fn generate_single_pass_diff(commit1: &str, commit2: &str) -> Result<String> {
-    GitOperations::run_git_diff(commit1, commit2, 999999)
+    GitOperations::run_git_diff(commit1, commit2, 999999) // Large unified context
 }
 
 fn parse_unified_diff(diff_output: &str) -> Result<HashMap<String, Vec<Hunk>>> {
-    DiffParser::parse(diff_output)
+    DiffParser::parse(diff_output) // Parses into a structured representation
 }
 
 fn post_process_files(patch_dict: &mut HashMap<String, Vec<Hunk>>, config: &Config) {
     for (filename, hunks) in patch_dict.iter_mut() {
-        let rule = config.find_matching_rule(filename);
-        if rule.api_signature_mode {
-            apply_api_signature_mode(hunks, rule.method_body_threshold);
-        } else if rule.include_method_body && rule.include_signatures {
-            apply_change_context_mode(hunks, rule.context_lines);
-        } else {
-            apply_context_filter(hunks, rule.context_lines);
+        if let Some(rule) = config.find_matching_rule(filename) {
+            if rule.file_pattern.ends_with(".cs") {
+                if rule.api_signature_mode && rule.include_method_body && rule.include_signatures {
+                    apply_combined_mode(hunks, rule); // Combined mode for C#
+                } else if rule.api_signature_mode {
+                    apply_api_signature_mode(hunks, rule); // Pure API Signature Mode
+                } else if rule.include_method_body && rule.include_signatures {
+                    apply_change_context_mode(hunks, rule); // Pure Change Context Mode
+                } else {
+					apply_context_filter(hunks, rule.context_lines) // for other file types.
+				}
+            }
         }
     }
 }
+fn apply_combined_mode(hunks: &mut Vec<Hunk>, rule: &Rule) {
+    // 1. Find changed methods (highest precedence)
+    let changed_methods = find_changed_methods(hunks);
+
+    // 2. Use a parser (Tree-sitter) to find *all* methods in the file
+    let all_methods = find_all_methods(hunks); // Get all methods from the AST
+
+	// Include namespace and class declarations
+    include_namespace_and_class_declarations(hunks);
+
+    for method in &all_methods {
+        if changed_methods.contains(method) {
+            // 3. Include full body for changed methods
+            include_full_method_body(hunks, method);
+        } else {
+            // 4. Check if it's a "surrounding method"
+            let mut is_surrounding = false;
+            for changed_method in &changed_methods {
+                let context_range = calculate_context_range(changed_method, rule.context_lines);
+                if is_method_within_context_range(method, &context_range) {
+                    is_surrounding = true;
+                    break; // Once we find it's surrounding one changed method, no need to check others
+                }
+            }
+
+            if is_surrounding {
+                // 5. "Surrounding" method: Signature + Truncated Body
+                include_method_signature(hunks, method);
+                include_truncated_method_body(hunks, method, rule.api_signature_method_body_lines);
+            } else {
+                // 6. Not surrounding, but still include signature (api_signature_mode) and truncated body.
+                include_method_signature(hunks, method);
+                include_truncated_method_body(hunks, method, rule.api_signature_method_body_lines)
+            }
+        }
+    }
+
+    // 7. Handle "other code" (Point 7)
+    handle_other_code(hunks, rule.context_lines);
+
+     // 8. Adjust Hunk Headers: VERY IMPORTANT. After all modifications, adjust hunk headers.
+    adjust_hunk_headers(hunks);
+}
+
 
 fn main() -> Result<()> {
     let config = Config::load("config.json")?;
     let raw_diff = generate_single_pass_diff("commit1", "commit2")?;
     let mut patch_dict = parse_unified_diff(&raw_diff)?;
     post_process_files(&mut patch_dict, &config);
+
+    // Reconstruct the final unified diff output
     let final_output = DiffParser::reconstruct_patch(&patch_dict);
     println!("{}", final_output);
     Ok(())
 }
+
+// Helper functions (placeholders - would need full implementation)
+fn find_changed_methods(hunks: &Vec<Hunk>) -> Vec<MethodInfo> { /* ... */ }
+fn find_all_methods(hunks: &Vec<Hunk>) -> Vec<MethodInfo>  { /* ... */ } // Uses parser
+fn calculate_context_range(method: &MethodInfo, context_lines: usize) -> (usize, usize) { /* ... */ }
+fn is_method_within_context_range(method: &MethodInfo, range: &(usize, usize)) -> bool { /* ... */ }
+fn include_full_method_body(hunks: &mut Vec<Hunk>, method: &MethodInfo) { /* ... */ }
+fn include_method_signature(hunks: &mut Vec<Hunk>, method: &MethodInfo) { /* ... */ }
+fn include_truncated_method_body(hunks: &mut Vec<Hunk>, method: &MethodInfo, max_lines: usize) { /* ... */ }
+fn include_namespace_and_class_declarations(hunks: &mut Vec<Hunk>) { /* ... */ }
+fn handle_other_code(hunks: &mut Vec<Hunk>, context_lines: usize) { /* ... */ }
+fn adjust_hunk_headers(hunks: &mut Vec<Hunk>) {/* ... */ }
+
+// Struct to represent method information (example)
+struct MethodInfo {
+    start_line: usize,
+    end_line: usize,
+    signature_line: usize,
+    name: String,
+    // ... other relevant data ...
+}
+
 ```
 
-## 8. Performance
-- **Single Git Command**: Efficient for 20-100 changed files.
-- **In-Memory Post-Processing**: Minimal overhead, simple to maintain.
+## 9. Performance
+
+*   **Single Git Command:** Efficient for a moderate number of changed files (e.g., 20-100).
+*   **In-Memory Post-Processing:** The Rust implementation should be performant, with the most significant overhead likely coming from parsing (especially with Tree-sitter).  Efficient data structures and algorithms should be used.
+
+
