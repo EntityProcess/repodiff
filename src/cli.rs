@@ -27,21 +27,11 @@ pub struct Args {
     /// Compare the latest commit on the current branch to the latest common commit with another branch
     #[arg(short, long)]
     pub branch: Option<String>,
-
-    /// Display the current version of RepoDiff
-    #[arg(short, long)]
-    pub version: bool,
 }
 
 /// Main entry point for the CLI
 pub fn run() -> Result<()> {
     let args = Args::parse();
-    
-    // Check if version flag is set
-    if args.version {
-        println!("RepoDiff version {}", VERSION);
-        return Ok(());
-    }
     
     // Initialize the RepoDiff tool
     let repodiff = RepoDiff::new("config.json")?;
