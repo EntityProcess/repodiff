@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use fnmatch_regex::glob_to_regex;
 use crate::utils::config_manager::FilterRule;
 use crate::utils::diff_parser::Hunk;
-use crate::filters::csharp_parser::{CSharpParser, CSharpMethod};
+use crate::filters::csharp_parser::CSharpParser;
 
 /// Manages file pattern filters for controlling context lines in git diffs
 pub struct FilterManager {

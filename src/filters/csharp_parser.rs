@@ -1,4 +1,4 @@
-use tree_sitter::{Parser, Language, Node, Tree};
+use tree_sitter::{Parser, Node};
 use crate::utils::diff_parser::Hunk;
 
 /// Represents a C# method in the code

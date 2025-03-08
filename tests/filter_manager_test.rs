@@ -10,23 +10,31 @@ fn test_new_with_filters() {
         FilterRule {
             file_pattern: "*.cs".to_string(),
             context_lines: 10,
+            include_method_body: false,
+            include_signatures: false,
         },
         FilterRule {
             file_pattern: "*Test*.cs".to_string(),
             context_lines: 5,
+            include_method_body: false,
+            include_signatures: false,
         },
         FilterRule {
             file_pattern: "*.xml".to_string(),
             context_lines: 2,
+            include_method_body: false,
+            include_signatures: false,
         },
         FilterRule {
             file_pattern: "*".to_string(),
             context_lines: 3,
+            include_method_body: false,
+            include_signatures: false,
         },
     ];
     
     // Create the FilterManager
-    let filter_manager = FilterManager::new(&filters);
+    let mut filter_manager = FilterManager::new(&filters);
     
     // Test post-processing with different file patterns
     let mut patch_dict = HashMap::new();
@@ -61,7 +69,7 @@ fn test_new_with_filters() {
 #[test]
 fn test_new_with_empty_filters() {
     // Create the FilterManager with empty filters
-    let filter_manager = FilterManager::new(&[]);
+    let mut filter_manager = FilterManager::new(&[]);
     
     // Test post-processing with different file patterns
     let mut patch_dict = HashMap::new();
@@ -85,23 +93,31 @@ fn test_post_process_files_with_complex_patterns() {
         FilterRule {
             file_pattern: "src/*.rs".to_string(),
             context_lines: 10,
+            include_method_body: false,
+            include_signatures: false,
         },
         FilterRule {
             file_pattern: "tests/*_test.rs".to_string(),
             context_lines: 5,
+            include_method_body: false,
+            include_signatures: false,
         },
         FilterRule {
             file_pattern: "**/*.json".to_string(),
             context_lines: 2,
+            include_method_body: false,
+            include_signatures: false,
         },
         FilterRule {
             file_pattern: "*".to_string(),
             context_lines: 3,
+            include_method_body: false,
+            include_signatures: false,
         },
     ];
     
     // Create the FilterManager
-    let filter_manager = FilterManager::new(&filters);
+    let mut filter_manager = FilterManager::new(&filters);
     
     // Test post-processing with different file patterns
     let mut patch_dict = HashMap::new();
