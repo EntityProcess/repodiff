@@ -5,12 +5,9 @@ use crate::error::Result;
 use crate::repodiff::RepoDiff;
 use crate::utils::git_operations::GitOperations;
 
-/// Version of the application
-const VERSION: &str = env!("CARGO_PKG_VERSION");
-
 /// Command-line arguments for RepoDiff
 #[derive(Parser, Debug)]
-#[command(author, version, about, long_about = None)]
+#[command(author, version = env!("CARGO_PKG_VERSION"), about, long_about = None)]
 pub struct Args {
     /// The file to output the combined diff
     #[arg(short, long)]

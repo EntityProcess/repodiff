@@ -10,8 +10,6 @@ use crate::filters::filter_manager::FilterManager;
 
 /// Main class for the RepoDiff tool that handles the core functionality
 pub struct RepoDiff {
-    /// Configuration manager
-    config_manager: ConfigManager,
     /// Token counter
     token_counter: TokenCounter,
     /// Filter manager
@@ -33,7 +31,6 @@ impl RepoDiff {
         let git_operations = GitOperations::new();
         
         Ok(RepoDiff {
-            config_manager,
             token_counter,
             filter_manager,
             git_operations,
