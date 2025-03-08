@@ -138,27 +138,6 @@ impl FilterManager {
             .filter(|(start, end)| self.csharp_parser.node_contains_changes(*start, *end, hunks))
             .collect();
 
-        let changed_class_declarations: Vec<_> = file_info.class_declarations.iter()
-            .filter(|(start, end)| self.csharp_parser.node_contains_changes(*start, *end, hunks))
-            .collect();
-
-        // Pre-compute context ranges for changed nodes
-        let mut context_ranges = Vec::new();
-        
-        // Add context ranges for using statements
-        for &(start, end) in &changed_using_statements {
-            let context_start = start.saturating_sub(rule.context_lines);
-            let context_end = end + rule.context_lines;
-            context_ranges.push((context_start, context_end));
-        }
-
-        // Add context ranges for class declarations
-        for &(start, end) in &changed_class_declarations {
-            let context_start = start.saturating_sub(rule.context_lines);
-            let context_end = end + rule.context_lines;
-            context_ranges.push((context_start, context_end));
-        }
-
         for hunk in hunks {
             let mut new_hunk = hunk.clone();
             let mut new_lines = Vec::new();
@@ -166,72 +145,131 @@ impl FilterManager {
 
             // Find changed methods in this hunk
             let mut changed_methods = Vec::new();
-            if rule.include_method_body {
-                let mut temp_line = current_line;
-                for line in &hunk.lines {
-                    if line.starts_with('+') || line.starts_with('-') {
-                        // Find any methods that contain this line
-                        for method in &file_info.methods {
-                            if temp_line >= method.start_line && temp_line <= method.end_line {
-                                if !changed_methods.contains(&method) {
-                                    changed_methods.push(method);
-                                    // Add context range for this method
-                                    let context_start = method.start_line.saturating_sub(rule.context_lines);
-                                    let context_end = method.end_line + rule.context_lines;
-                                    context_ranges.push((context_start, context_end));
-                                }
+            let mut change_locations = Vec::new();
+            
+            // First pass: collect all change locations and changed methods
+            let mut temp_line = current_line;
+            for (i, line) in hunk.lines.iter().enumerate() {
+                if line.starts_with('+') || line.starts_with('-') {
+                    change_locations.push((i, temp_line));
+                    // Find any methods that contain this line
+                    for method in &file_info.methods {
+                        if temp_line >= method.start_line && temp_line <= method.end_line {
+                            if !changed_methods.contains(&method) {
+                                changed_methods.push(method);
                             }
                         }
                     }
-                    if !line.starts_with('-') {
-                        temp_line += 1;
+                }
+                if !line.starts_with('-') {
+                    temp_line += 1;
+                }
+            }
+
+            // Find all methods that are within context range of changed methods
+            let mut contextual_methods = Vec::new();
+            if rule.include_signatures {
+                for method in &file_info.methods {
+                    if !changed_methods.contains(&method) {
+                        for changed_method in &changed_methods {
+                            let context_start = changed_method.start_line.saturating_sub(rule.context_lines);
+                            let context_end = changed_method.end_line + rule.context_lines;
+                            if method.signature_line >= context_start && method.signature_line <= context_end {
+                                contextual_methods.push(method);
+                                break;
+                            }
+                        }
                     }
                 }
             }
 
-            // Now process each line
-            for line in &hunk.lines {
+            // Reset current_line for second pass
+            current_line = hunk.new_start;
+            
+            // Second pass: process lines
+            for (i, line) in hunk.lines.iter().enumerate() {
                 let mut should_include = false;
+                let mut should_replace_with_placeholder = false;
 
                 // Always include changed lines
                 if line.starts_with('+') || line.starts_with('-') {
                     should_include = true;
                 } else {
-                    // For context lines, check various conditions
-                    
+                    // Check if line is part of a namespace/class declaration that encloses a changed method
+                    let in_enclosing_declaration = file_info.class_declarations.iter()
+                        // For now, just check class declarations since namespace_declarations isn't available
+                        .any(|(start, end)| {
+                            // Check if this declaration encloses any changed method
+                            changed_methods.iter().any(|m| {
+                                m.start_line >= *start && m.end_line <= *end && 
+                                current_line == *start // Only include the declaration line itself
+                            })
+                        });
+
+                    // Check if line is part of a changed method
+                    let in_changed_method = if rule.include_method_body {
+                        changed_methods.iter().any(|m| 
+                            current_line >= m.start_line && current_line <= m.end_line
+                        )
+                    } else {
+                        // If include_method_body is false, only include signature
+                        changed_methods.iter().any(|m| current_line == m.signature_line)
+                    };
+
+                    // Check if line is part of a contextual method
+                    let (in_contextual_method, is_contextual_signature) = if rule.include_signatures {
+                        let is_sig = contextual_methods.iter().any(|m| current_line == m.signature_line);
+                        let is_body = contextual_methods.iter().any(|m| 
+                            current_line > m.signature_line && current_line <= m.end_line
+                        );
+                        (is_sig || is_body, is_sig)
+                    } else {
+                        (false, false)
+                    };
+
                     // Check if line is part of a changed using statement
                     let in_changed_using = changed_using_statements.iter()
                         .any(|(start, end)| current_line >= *start && current_line <= *end);
 
-                    // Check if line is part of a changed class declaration
-                    let in_changed_class_decl = changed_class_declarations.iter()
-                        .any(|(start, end)| current_line >= *start && current_line <= *end);
-
-                    // Check if line is part of a changed method
-                    let in_changed_method = changed_methods.iter()
-                        .any(|m| current_line >= m.start_line && current_line <= m.end_line);
-
-                    // Check if line is a method signature
-                    let is_signature = if rule.include_signatures {
-                        file_info.methods.iter()
-                            .any(|m| current_line == m.signature_line)
+                    // Handle "other code" within context range
+                    let within_context = if !in_changed_method && !in_contextual_method {
+                        change_locations.iter().any(|(_, change_line)| {
+                            let line_diff = if current_line > *change_line {
+                                current_line - *change_line
+                            } else {
+                                *change_line - current_line
+                            };
+                            line_diff <= rule.context_lines
+                        })
                     } else {
                         false
                     };
 
-                    // Check if line is within any context range
-                    let in_context_range = context_ranges.iter()
-                        .any(|(start, end)| current_line >= *start && current_line <= *end);
+                    should_include = in_enclosing_declaration || 
+                                   in_changed_method ||
+                                   in_contextual_method ||
+                                   in_changed_using ||
+                                   within_context;
 
-                    should_include = in_changed_using || 
-                                   in_changed_class_decl || 
-                                   in_changed_method || 
-                                   is_signature || 
-                                   in_context_range;
+                    // Determine if we should replace this line with a placeholder
+                    should_replace_with_placeholder = if !rule.include_method_body && in_changed_method && !changed_methods.iter().any(|m| current_line == m.signature_line) {
+                        true
+                    } else if in_contextual_method && !is_contextual_signature {
+                        true
+                    } else {
+                        false
+                    };
                 }
 
                 if should_include {
-                    new_lines.push(line.clone());
+                    if should_replace_with_placeholder {
+                        // Only add the placeholder once per method body
+                        if !new_lines.last().map_or(false, |l: &String| l.ends_with("{ ... }")) {
+                            new_lines.push(" { ... }".to_string());
+                        }
+                    } else {
+                        new_lines.push(line.clone());
+                    }
                 }
                 
                 if !line.starts_with('-') {

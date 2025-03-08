@@ -146,6 +146,116 @@ fn test_post_process_files_with_complex_patterns() {
     assert!(processed.contains_key("README.md"));
 }
 
+#[test]
+fn test_csharp_method_and_property_parsing() {
+    let filters = vec![
+        FilterRule {
+            file_pattern: "*.cs".to_string(),
+            context_lines: 3,
+            include_method_body: true,
+            include_signatures: true,
+        },
+    ];
+    
+    let mut filter_manager = FilterManager::new(&filters);
+    let mut patch_dict = HashMap::new();
+    
+    // Test regular method
+    let method_hunk = Hunk {
+        header: "@@ -1,10 +1,10 @@".to_string(),
+        old_start: 1,
+        old_count: 10,
+        new_start: 1,
+        new_count: 10,
+        lines: vec![
+            "namespace Test {".to_string(),
+            "    public class MyClass {".to_string(),
+            "        public void MyMethod() {".to_string(),
+            "            int x = 1;".to_string(),
+            "-           Console.WriteLine(x);".to_string(),
+            "+           Console.WriteLine(x + 1);".to_string(),
+            "        }".to_string(),
+            "    }".to_string(),
+            "}".to_string(),
+        ],
+        is_rename: false,
+        rename_from: None,
+        rename_to: None,
+        similarity_index: None,
+    };
+    
+    // Test property with accessors
+    let property_hunk = Hunk {
+        header: "@@ -1,15 +1,15 @@".to_string(),
+        old_start: 1,
+        old_count: 15,
+        new_start: 1,
+        new_count: 15,
+        lines: vec![
+            "namespace Test {".to_string(),
+            "    public class MyClass {".to_string(),
+            "        public int MyProperty".to_string(),
+            "        {".to_string(),
+            "            get { return myField; }".to_string(),
+            "            set".to_string(),
+            "            {".to_string(),
+            "-               myField = value;".to_string(),
+            "+               myField = value + 1;".to_string(),
+            "            }".to_string(),
+            "        }".to_string(),
+            "    }".to_string(),
+            "}".to_string(),
+        ],
+        is_rename: false,
+        rename_from: None,
+        rename_to: None,
+        similarity_index: None,
+    };
+    
+    // Test arrow expression property
+    let arrow_property_hunk = Hunk {
+        header: "@@ -1,10 +1,10 @@".to_string(),
+        old_start: 1,
+        old_count: 10,
+        new_start: 1,
+        new_count: 10,
+        lines: vec![
+            "namespace Test {".to_string(),
+            "    public class MyClass {".to_string(),
+            "-       public int QuickProperty => myField;".to_string(),
+            "+       public int QuickProperty => myField + 1;".to_string(),
+            "    }".to_string(),
+            "}".to_string(),
+        ],
+        is_rename: false,
+        rename_from: None,
+        rename_to: None,
+        similarity_index: None,
+    };
+    
+    patch_dict.insert("Method.cs".to_string(), vec![method_hunk]);
+    patch_dict.insert("Property.cs".to_string(), vec![property_hunk]);
+    patch_dict.insert("ArrowProperty.cs".to_string(), vec![arrow_property_hunk]);
+    
+    let processed = filter_manager.post_process_files(&patch_dict);
+    
+    // Check method processing
+    let method_result = &processed["Method.cs"][0];
+    assert!(method_result.lines.iter().any(|l| l.contains("public void MyMethod()")));
+    assert!(method_result.lines.iter().any(|l| l.contains("Console.WriteLine(x + 1)")));
+    
+    // Check property processing
+    let property_result = &processed["Property.cs"][0];
+    assert!(property_result.lines.iter().any(|l| l.contains("public int MyProperty")));
+    assert!(property_result.lines.iter().any(|l| l.contains("get { return myField; }")));
+    assert!(property_result.lines.iter().any(|l| l.contains("myField = value + 1")));
+    
+    // Check arrow property processing
+    let arrow_result = &processed["ArrowProperty.cs"][0];
+    assert!(arrow_result.lines.iter().any(|l| l.contains("public int QuickProperty =>")));
+    assert!(arrow_result.lines.iter().any(|l| l.contains("myField + 1")));
+}
+
 // Helper function to create a test hunk
 fn create_test_hunk() -> Hunk {
     Hunk {

@@ -90,6 +90,64 @@ impl CSharpParser {
                     has_changes: false,
                 });
             },
+            "property_declaration" => {
+                let start_line = node.start_position().row + 1;
+                let end_line = node.end_position().row + 1;
+                let signature_line = start_line;
+
+                // Check if this is an arrow expression property (=>)
+                let is_arrow_expr = node.child_by_field_name("value")
+                    .map(|n| n.kind() == "arrow_expression_clause")
+                    .unwrap_or(false);
+
+                if is_arrow_expr {
+                    // For arrow expression properties, treat the whole thing as one method
+                    let text = node.utf8_text(code.as_bytes())
+                        .unwrap_or_default()
+                        .to_string();
+                    
+                    file.methods.push(CSharpMethod {
+                        start_line,
+                        end_line,
+                        signature_line,
+                        text,
+                        has_changes: false,
+                    });
+                } else {
+                    // For regular properties, first add the property declaration itself
+                    let text = node.utf8_text(code.as_bytes())
+                        .unwrap_or_default()
+                        .to_string();
+                    
+                    file.methods.push(CSharpMethod {
+                        start_line,
+                        end_line,
+                        signature_line,
+                        text,
+                        has_changes: false,
+                    });
+
+                    // Then look for accessors within the property
+                    let mut cursor = node.walk();
+                    for child in node.children(&mut cursor) {
+                        if child.kind() == "accessor_declaration" {
+                            let accessor_start = child.start_position().row + 1;
+                            let accessor_end = child.end_position().row + 1;
+                            let accessor_text = child.utf8_text(code.as_bytes())
+                                .unwrap_or_default()
+                                .to_string();
+                            
+                            file.methods.push(CSharpMethod {
+                                start_line: accessor_start,
+                                end_line: accessor_end,
+                                signature_line: accessor_start,
+                                text: accessor_text,
+                                has_changes: false,
+                            });
+                        }
+                    }
+                }
+            },
             "using_directive" => {
                 let start_line = node.start_position().row + 1;
                 let end_line = node.end_position().row + 1;
