@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use fnmatch_regex::glob_to_regex;
 use crate::utils::config_manager::FilterRule;
 use crate::utils::diff_parser::Hunk;
-use crate::filters::csharp_parser::CSharpParser;
+use crate::filters::csharp_parser::{CSharpParser, CSharpMethod};
 
 /// Manages file pattern filters for controlling context lines in git diffs
 pub struct FilterManager {
@@ -130,39 +130,105 @@ impl FilterManager {
             return self.apply_context_filter(hunks, rule.context_lines);
         }
 
-        let methods = self.csharp_parser.parse_methods(code, hunks);
+        let file_info = self.csharp_parser.parse_file(code, hunks);
         let mut processed_hunks = Vec::new();
+
+        // Pre-compute which nodes have changes to avoid repeated checks
+        let changed_using_statements: Vec<_> = file_info.using_statements.iter()
+            .filter(|(start, end)| self.csharp_parser.node_contains_changes(*start, *end, hunks))
+            .collect();
+
+        let changed_class_declarations: Vec<_> = file_info.class_declarations.iter()
+            .filter(|(start, end)| self.csharp_parser.node_contains_changes(*start, *end, hunks))
+            .collect();
+
+        // Pre-compute context ranges for changed nodes
+        let mut context_ranges = Vec::new();
+        
+        // Add context ranges for using statements
+        for &(start, end) in &changed_using_statements {
+            let context_start = start.saturating_sub(rule.context_lines);
+            let context_end = end + rule.context_lines;
+            context_ranges.push((context_start, context_end));
+        }
+
+        // Add context ranges for class declarations
+        for &(start, end) in &changed_class_declarations {
+            let context_start = start.saturating_sub(rule.context_lines);
+            let context_end = end + rule.context_lines;
+            context_ranges.push((context_start, context_end));
+        }
 
         for hunk in hunks {
             let mut new_hunk = hunk.clone();
             let mut new_lines = Vec::new();
             let mut current_line = hunk.new_start;
 
+            // Find changed methods in this hunk
+            let mut changed_methods = Vec::new();
+            if rule.include_method_body {
+                let mut temp_line = current_line;
+                for line in &hunk.lines {
+                    if line.starts_with('+') || line.starts_with('-') {
+                        // Find any methods that contain this line
+                        for method in &file_info.methods {
+                            if temp_line >= method.start_line && temp_line <= method.end_line {
+                                if !changed_methods.contains(&method) {
+                                    changed_methods.push(method);
+                                    // Add context range for this method
+                                    let context_start = method.start_line.saturating_sub(rule.context_lines);
+                                    let context_end = method.end_line + rule.context_lines;
+                                    context_ranges.push((context_start, context_end));
+                                }
+                            }
+                        }
+                    }
+                    if !line.starts_with('-') {
+                        temp_line += 1;
+                    }
+                }
+            }
+
+            // Now process each line
             for line in &hunk.lines {
-                let should_include = if line.starts_with('+') || line.starts_with('-') {
-                    // Always include changed lines
-                    true
+                let mut should_include = false;
+
+                // Always include changed lines
+                if line.starts_with('+') || line.starts_with('-') {
+                    should_include = true;
                 } else {
-                    // For context lines, check if they're part of a method we want to keep
-                    let in_changed_method = methods.iter()
-                        .any(|m| m.has_changes && 
-                             current_line >= m.start_line && 
-                             current_line <= m.end_line);
+                    // For context lines, check various conditions
+                    
+                    // Check if line is part of a changed using statement
+                    let in_changed_using = changed_using_statements.iter()
+                        .any(|(start, end)| current_line >= *start && current_line <= *end);
 
-                    let in_context_range = methods.iter()
-                        .any(|m| {
-                            let context_start = m.start_line.saturating_sub(rule.context_lines);
-                            let context_end = m.end_line + rule.context_lines;
-                            current_line >= context_start && current_line <= context_end
-                        });
+                    // Check if line is part of a changed class declaration
+                    let in_changed_class_decl = changed_class_declarations.iter()
+                        .any(|(start, end)| current_line >= *start && current_line <= *end);
 
-                    let is_signature = methods.iter()
-                        .any(|m| current_line == m.signature_line);
+                    // Check if line is part of a changed method
+                    let in_changed_method = changed_methods.iter()
+                        .any(|m| current_line >= m.start_line && current_line <= m.end_line);
 
-                    (rule.include_method_body && in_changed_method) ||
-                    (rule.include_signatures && is_signature) ||
-                    (!in_changed_method && in_context_range)
-                };
+                    // Check if line is a method signature
+                    let is_signature = if rule.include_signatures {
+                        file_info.methods.iter()
+                            .any(|m| current_line == m.signature_line)
+                    } else {
+                        false
+                    };
+
+                    // Check if line is within any context range
+                    let in_context_range = context_ranges.iter()
+                        .any(|(start, end)| current_line >= *start && current_line <= *end);
+
+                    should_include = in_changed_using || 
+                                   in_changed_class_decl || 
+                                   in_changed_method || 
+                                   is_signature || 
+                                   in_context_range;
+                }
 
                 if should_include {
                     new_lines.push(line.clone());
