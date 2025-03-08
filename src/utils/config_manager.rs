@@ -10,6 +10,12 @@ pub struct FilterRule {
     pub file_pattern: String,
     /// Number of context lines to keep around changes
     pub context_lines: usize,
+    /// Whether to include the full method body for changed methods (C# only)
+    #[serde(default)]
+    pub include_method_body: bool,
+    /// Whether to include method signatures within context range (C# only)
+    #[serde(default)]
+    pub include_signatures: bool,
 }
 
 /// Configuration for the RepoDiff tool
@@ -28,6 +34,8 @@ impl Default for Config {
             filters: vec![FilterRule {
                 file_pattern: "*".to_string(),
                 context_lines: 3,
+                include_method_body: false,
+                include_signatures: false,
             }],
         }
     }

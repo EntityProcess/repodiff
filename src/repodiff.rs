@@ -48,7 +48,7 @@ impl RepoDiff {
     /// # Returns
     ///
     /// The number of tokens in the processed diff
-    pub fn process_diff(&self, commit1: &str, commit2: &str, output_file: &str) -> Result<usize> {
+    pub fn process_diff(&mut self, commit1: &str, commit2: &str, output_file: &str) -> Result<usize> {
         // Get the raw diff output
         let raw_diff = self.git_operations.run_git_diff(commit1, commit2)?;
         

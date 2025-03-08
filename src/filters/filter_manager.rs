@@ -2,11 +2,14 @@ use std::collections::HashMap;
 use fnmatch_regex::glob_to_regex;
 use crate::utils::config_manager::FilterRule;
 use crate::utils::diff_parser::Hunk;
+use crate::filters::csharp_parser::{CSharpParser, CSharpMethod};
 
 /// Manages file pattern filters for controlling context lines in git diffs
 pub struct FilterManager {
     /// List of filter rules
     filters: Vec<FilterRule>,
+    /// C# parser
+    csharp_parser: CSharpParser,
 }
 
 impl FilterManager {
@@ -20,12 +23,17 @@ impl FilterManager {
             vec![FilterRule {
                 file_pattern: "*".to_string(),
                 context_lines: 3,
+                include_method_body: false,
+                include_signatures: false,
             }]
         } else {
             filters.to_vec()
         };
         
-        FilterManager { filters }
+        FilterManager { 
+            filters,
+            csharp_parser: CSharpParser::new(),
+        }
     }
     
     /// Find the first matching filter rule for a filename
@@ -46,6 +54,8 @@ impl FilterManager {
         FilterRule {
             file_pattern: "*".to_string(),
             context_lines: 3,
+            include_method_body: false,
+            include_signatures: false,
         }
     }
     
@@ -107,33 +117,129 @@ impl FilterManager {
         filtered_hunks
     }
     
-    /// Apply post-processing filters to each file in the patch
+    /// Process C# file with method-aware filtering
+    ///
+    /// # Arguments
+    ///
+    /// * `hunks` - List of hunk dictionaries containing diff information
+    /// * `rule` - The filter rule to apply
+    /// * `code` - The full C# file content
+    fn process_csharp_file(&mut self, hunks: &[Hunk], rule: &FilterRule, code: &str) -> Vec<Hunk> {
+        if !rule.include_method_body && !rule.include_signatures {
+            // If neither C# specific option is enabled, fall back to standard context filtering
+            return self.apply_context_filter(hunks, rule.context_lines);
+        }
+
+        let methods = self.csharp_parser.parse_methods(code, hunks);
+        let mut processed_hunks = Vec::new();
+
+        for hunk in hunks {
+            let mut new_hunk = hunk.clone();
+            let mut new_lines = Vec::new();
+            let mut current_line = hunk.new_start;
+
+            for line in &hunk.lines {
+                let should_include = if line.starts_with('+') || line.starts_with('-') {
+                    // Always include changed lines
+                    true
+                } else {
+                    // For context lines, check if they're part of a method we want to keep
+                    let in_changed_method = methods.iter()
+                        .any(|m| m.has_changes && 
+                             current_line >= m.start_line && 
+                             current_line <= m.end_line);
+
+                    let in_context_range = methods.iter()
+                        .any(|m| {
+                            let context_start = m.start_line.saturating_sub(rule.context_lines);
+                            let context_end = m.end_line + rule.context_lines;
+                            current_line >= context_start && current_line <= context_end
+                        });
+
+                    let is_signature = methods.iter()
+                        .any(|m| current_line == m.signature_line);
+
+                    (rule.include_method_body && in_changed_method) ||
+                    (rule.include_signatures && is_signature) ||
+                    (!in_changed_method && in_context_range)
+                };
+
+                if should_include {
+                    new_lines.push(line.clone());
+                }
+                
+                if !line.starts_with('-') {
+                    current_line += 1;
+                }
+            }
+
+            // Update hunk with filtered lines
+            new_hunk.lines = new_lines;
+            new_hunk.new_count = new_hunk.lines.iter()
+                .filter(|l| !l.starts_with('-'))
+                .count();
+            new_hunk.old_count = new_hunk.lines.iter()
+                .filter(|l| !l.starts_with('+'))
+                .count();
+
+            if !new_hunk.lines.is_empty() {
+                processed_hunks.push(new_hunk);
+            }
+        }
+
+        processed_hunks
+    }
+
+    /// Post-process files according to their matching filter rules
     ///
     /// # Arguments
     ///
     /// * `patch_dict` - Dictionary mapping filenames to lists of hunks
-    pub fn post_process_files(&self, patch_dict: &HashMap<String, Vec<Hunk>>) -> HashMap<String, Vec<Hunk>> {
+    pub fn post_process_files(&mut self, patch_dict: &HashMap<String, Vec<Hunk>>) -> HashMap<String, Vec<Hunk>> {
         let mut processed_dict = HashMap::new();
         
         for (filename, hunks) in patch_dict {
             let rule = self.find_matching_rule(filename);
             
-            // Check if this is a renamed file
-            let is_rename = hunks.iter().any(|hunk| hunk.is_rename);
-            
-            // Apply context line filtering
-            let context_lines = rule.context_lines;
-            let processed_hunks = self.apply_context_filter(hunks, context_lines);
-            
-            // Preserve rename information in processed hunks
-            if is_rename && !processed_hunks.is_empty() && !hunks.is_empty() {
-                // We already preserve rename info when cloning hunks
-                processed_dict.insert(filename.clone(), processed_hunks);
+            // Special handling for C# files
+            if filename.ends_with(".cs") && (rule.include_method_body || rule.include_signatures) {
+                // TODO: Get the full file content from Git
+                // For now, we'll reconstruct it from the hunks
+                let code = self.reconstruct_file_content(hunks);
+                processed_dict.insert(filename.clone(), self.process_csharp_file(hunks, &rule, &code));
             } else {
-                processed_dict.insert(filename.clone(), processed_hunks);
+                processed_dict.insert(filename.clone(), self.apply_context_filter(hunks, rule.context_lines));
             }
         }
         
         processed_dict
+    }
+
+    /// Reconstruct file content from hunks (temporary solution)
+    ///
+    /// # Arguments
+    ///
+    /// * `hunks` - List of hunks containing the file changes
+    fn reconstruct_file_content(&self, hunks: &[Hunk]) -> String {
+        let mut content = String::new();
+        let mut current_line = 1;
+
+        for hunk in hunks {
+            // Add any missing lines between hunks as empty lines
+            while current_line < hunk.new_start {
+                content.push_str("\n");
+                current_line += 1;
+            }
+
+            for line in &hunk.lines {
+                if !line.starts_with('-') {
+                    content.push_str(&line[1..]);  // Skip the first character (space or +)
+                    content.push('\n');
+                    current_line += 1;
+                }
+            }
+        }
+
+        content
     }
 } 
