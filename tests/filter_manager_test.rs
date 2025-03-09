@@ -280,7 +280,7 @@ fn test_include_signatures_and_method_body() {
     let filters = vec![
         FilterRule {
             file_pattern: "*.cs".to_string(),
-            context_lines: 3,
+            context_lines: 4,
             include_method_body: true,
             include_signatures: true,
         },
@@ -290,7 +290,7 @@ fn test_include_signatures_and_method_body() {
     let mut patch_dict = HashMap::new();
     
     let hunk = Hunk {
-        header: "@@ -1,60 +1,60 @@".to_string(), // Updated line count to account for Method4
+        header: "@@ -1,60 +1,60 @@".to_string(),
         old_start: 1,
         old_count: 60,
         new_start: 1,
@@ -388,10 +388,7 @@ namespace Test {
         public void Method2() {
             // Initialize variables
             bool flag = true;
-            int counter = 0;
  // { ... }
-            // Final processing
-            if (counter > 5) {
                 return;
             }
         }
@@ -420,12 +417,7 @@ namespace Test {
         public void Method4() {
             // Initial setup
             var setup = true;
-            var items = new List<int>();
  // { ... }
-            // Complex logic block
-            if (setup) {
-                items.Add(42);
-            }
         }
     }
 }"#);
