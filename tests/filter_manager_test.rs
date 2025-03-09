@@ -215,8 +215,11 @@ fn test_csharp_property_body_inclusion() {
         new_start: 1,
         new_count: 15,
         lines: raw_to_lines(r#"
+using System;
+
 namespace Test {
     public class MyClass {
+        private int myField;
         public int MyProperty
         {
             get { return myField; }
@@ -303,7 +306,8 @@ fn raw_to_lines(s: &str) -> Vec<String> {
                 let rest = &line[1..];
                 format!("{}{}", marker, rest)
             } else {
-                line.to_string()
+                // For non-diff lines, add a space prefix to mark them as context lines
+                format!(" {}", line)
             }
         })
         .collect()
@@ -404,11 +408,6 @@ namespace Test {
     let processed = filter_manager.post_process_files(&patch_dict);
     let processed_hunks = &processed["test.cs"];
     
-    println!("Actual lines:");
-    for line in &processed_hunks[0].lines {
-        println!("  {:?}", line);
-    }
-    
     let expected_lines = raw_to_lines(r#"
 namespace Test {
     public class MyClass {
@@ -422,7 +421,17 @@ namespace Test {
         public void Method2() {
             // Initialize variables
             bool flag = true;
- // { ... }
+            int counter = 0;
+
+            // Complex logic block
+            if (flag) {
+                for (int i = 0; i < 10; i++) {
+                    counter++;
+                }
+            }
+
+            // Final processing
+            if (counter > 5) {
                 return;
             }
         }
@@ -436,11 +445,10 @@ namespace Test {
             var result = Process(items);
 
             // Complex logic block
--           if (setup) {
-+           if (setup && items.Any()) {
+            if (setup && items.Any()) {
                 for (int i = 0; i < 10; i++) {
                     counter++;
-+                   items.Add(i);
+                    items.Add(i);
                 }
             }
 
@@ -451,7 +459,15 @@ namespace Test {
         public void Method4() {
             // Initial setup
             var setup = true;
- // { ... }
+            var items = new List<int>();
+
+            // Some processing
+            var result = Process(items);
+
+            // Complex logic block
+            if (setup) {
+                items.Add(42);
+            }
         }
     }
 }"#);

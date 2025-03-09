@@ -300,23 +300,23 @@ impl FilterManager {
     ///
     /// * `patch_dict` - Dictionary mapping filenames to lists of hunks
     pub fn post_process_files(&mut self, patch_dict: &HashMap<String, Vec<Hunk>>) -> HashMap<String, Vec<Hunk>> {
-        let mut processed_dict = HashMap::new();
+        let mut result = HashMap::new();
         
-        for (filename, hunks) in patch_dict {
-            let rule = self.find_matching_rule(filename);
+        for (file_path, hunks) in patch_dict {
+            let rule = self.find_matching_rule(file_path);
             
             // Special handling for C# files
-            if filename.ends_with(".cs") && (rule.include_method_body || rule.include_signatures) {
+            if file_path.ends_with(".cs") && (rule.include_method_body || rule.include_signatures) {
                 // TODO: Get the full file content from Git
                 // For now, we'll reconstruct it from the hunks
                 let code = self.reconstruct_file_content(hunks);
-                processed_dict.insert(filename.clone(), self.process_csharp_file(hunks, &rule, &code));
+                result.insert(file_path.clone(), self.process_csharp_file(hunks, &rule, &code));
             } else {
-                processed_dict.insert(filename.clone(), self.apply_context_filter(hunks, rule.context_lines));
+                result.insert(file_path.clone(), self.apply_context_filter(hunks, rule.context_lines));
             }
         }
         
-        processed_dict
+        result
     }
 
     /// Reconstruct file content from hunks (temporary solution)
@@ -326,24 +326,17 @@ impl FilterManager {
     /// * `hunks` - List of hunks containing the file changes
     fn reconstruct_file_content(&self, hunks: &[Hunk]) -> String {
         let mut content = String::new();
-        let mut current_line = 1;
-
-        for hunk in hunks {
-            // Add any missing lines between hunks as empty lines
-            while current_line < hunk.new_start {
-                content.push_str("\n");
-                current_line += 1;
+        for line in hunks.iter().flat_map(|h| &h.lines) {
+            if line.starts_with('-') {
+                continue;
             }
-
-            for line in &hunk.lines {
-                if !line.starts_with('-') {
-                    content.push_str(&line[1..]);  // Skip the first character (space or +)
-                    content.push('\n');
-                    current_line += 1;
-                }
+            if line.starts_with('+') {
+                content.push_str(&line[1..]);
+            } else {
+                content.push_str(line);
             }
+            content.push('\n');
         }
-
         content
     }
 } 

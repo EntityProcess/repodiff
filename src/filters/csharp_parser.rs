@@ -131,7 +131,7 @@ impl CSharpParser {
                     });
 
                     // Then look for accessors within the property
-                    let mut cursor = node.walk();
+                    let mut cursor: tree_sitter::TreeCursor<'_> = node.walk();
                     for child in node.children(&mut cursor) {
                         if child.kind() == "accessor_declaration" {
                             let accessor_start = child.start_position().row + 1;
