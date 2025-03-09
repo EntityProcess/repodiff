@@ -1,12 +1,8 @@
-Okay, here's the revised PRD with `api_signature_mode` and `api_signature_method_body_lines` removed, and the logic streamlined to use only `include_method_body`, `include_signatures`, and `context_lines`.  I've also adjusted the pseudocode and explanations to reflect these changes.
-
---- START OF FILE core-prd-revised.txt ---
-
 # Product Requirements Document (PRD) for RepoDiff: Single-Pass Diff + Post-Processing (Rust)
 
 ## 1. Overview
 
-RepoDiff generates a simplified and context-aware unified diff of a Git repository, designed for code reviews and Large Language Model (LLM) analysis. It performs a **single** `git diff` command to capture all changed files and then post-processes the output in Rust to apply user-defined rules. This approach avoids multiple Git calls and complex exclude patterns.  The key feature is flexible handling of C# files, offering control over the inclusion of method bodies and surrounding signatures.
+RepoDiff generates a simplified and context-aware unified diff of a Git repository, designed for code reviews and Large Language Model (LLM) analysis. It performs a **single** `git diff` command to capture all changed files and then post-processes the output in Rust to apply user-defined rules.  This approach avoids multiple Git calls and complex exclude patterns.  The key feature is flexible handling of C# files, offering control over the inclusion of method bodies and surrounding signatures.
 
 ## 2. Key Objectives
 
@@ -61,15 +57,15 @@ This section details the handling of C# (`*.cs`) files.
     *   **Changed Method:** A method whose body (between `{` and `}`) contains at least one line from a diff hunk.
     *   **Diff Hunk:** A section of the unified diff output indicating a change (starts with `@@ ... @@`).
     *   **Method Signature:** The line declaring a method (e.g., `public int Foo(int x)`).
-    *   **Context Range:** A range of lines around a changed method: `method_signature_start_line - context_lines` to `method_body_end_line + context_lines`.
+    *   **Context Range:** A range of lines around a *changed* method, defined as `method_signature_start_line - context_lines` to `method_body_end_line + context_lines`.  A method is considered *contextual* if its signature line falls within this range *for any changed method*. This range determines which unchanged methods are included as contextual methods, and increasing `context_lines` expands the range, potentially including more contextual methods and their associated code.
     *   **Contextual Method:** A method *other than* the changed method whose signature falls within the context range.
     *   **Nested Structures:** Methods within methods (lambdas, local functions), or classes within classes.
 
 *   **Configuration Options:**
 
     *   `include_method_body`:  If `true`, the *entire* body of a *changed* method is included in the output. If `false`, the changed method's body is replaced with `{ ... }`.
-    *   `include_signatures`: If `true`, the *signatures* of contextual methods (methods within the context range of a changed method) are included.  The *bodies* of these contextual methods are always replaced with `{ ... }`.
-    *    `context_lines`: Defines the number of lines before and after a changed method's signature and closing brace to consider for including contextual method signatures and "other code" (see Section 6).
+    *   `include_signatures`: If `true`, the *signatures* of contextual methods (methods within the context range of a changed method) are included.  The *bodies* of these contextual methods are handled as described below.
+    *    `context_lines`: Defines the number of lines before and after a changed method's signature and closing brace to consider for including contextual method signatures and "other code".
 
 *   **Behavior:**
 
@@ -81,12 +77,17 @@ This section details the handling of C# (`*.cs`) files.
     4.  **Calculate the Context Range:** For each changed method, calculate the context range.
     5.  **Include Contextual Method Signatures (if `include_signatures` is true):**
         *   If `include_signatures` is `true`, include the *signatures* of contextual methods (those whose signatures fall within the context range).
-        *   Replace the *bodies* of these contextual methods with `{ ... }`.
+        *   **Replace the *bodies* of these contextual methods with a placeholder *only if* the body exceeds `2 * context_lines` lines. Otherwise, include the entire body.**
+            *   **If the body exceeds `2 * context_lines` lines:**
+                *   Include the first `context_lines` lines of the method body.
+                *   Insert a placeholder line `// { ... }` to indicate omitted code, followed by the last `context_lines` lines of the method body.
+            *   **If the body has `2 * context_lines` lines or fewer, include the entire body without a placeholder.**
+        *   **All lines for contextual methods (signature, body lines, and placeholder) are marked as context lines (prefixed with a space) in the unified diff output.**
     6.  **Handle Nested Structures:**
         *   Nested methods/lambdas: Treat as part of the enclosing method's body.
         *   Nested classes: Treat as separate classes.
     7.  **Handle Code Outside of Methods (Within the Context Range):** Address "other code" (comments, using directives, etc.) as described in the dedicated section (Section 6).
-    8. **Output Format**: Ensure that the result remains a valid unified diff.
+    8.  **Output Format**: Ensure that the result remains a valid unified diff as described in Section 8.
 
 *   **Use Cases:**
 
@@ -101,11 +102,8 @@ This section details the handling of C# (`*.cs`) files.
 *   **How it Works:**
 
     1.  **Identify "Other Code":** Any lines *not* within a method's `{` and `}` and *not* namespace/class declaration lines.
-    2.  **Check Context Range:** Determine if the line number of the "other code" falls within the context range of a *changed method*.
-    3.  **Apply Standard Diff Context Rules:**
-        *   **Changed Lines:** Include if changed (marked with `+` or `-`).
-        *   **Unchanged Lines (Within Context):** Include as a context line (prefixed with a space) if within the context range.
-        *   **Unchanged Lines (Outside Context):** Omit.
+    2.  **Generate standard unified diff hunks that include *all* changed lines in "other code" and `context_lines` unchanged lines before and after each group of changed lines.**
+    3.  **These hunks are included *regardless* of the context range of changed methods**, ensuring all changes outside methods are visible with appropriate context. Increasing `context_lines` will include more unchanged lines around these changed lines, providing additional context outside the changed methods.
 
 ## 7. Additional Instructions in Output
 
@@ -118,8 +116,10 @@ NOTE: Some method bodies have been replaced with "{ ... }" to improve clarity fo
 - include_method_body: true, will cause the entire method to be included.
 - include_signatures: true, will include the signatures of methods that surround the changed method.
 ```
+## 8. Output Format
+Generate a valid unified diff with adjusted hunk headers to reflect the included lines.  Insert placeholder lines like `// { ... }` (prefixed with a space as a context line) *within contextual methods* to indicate omitted code sections when the body exceeds `2 * context_lines` lines. Ensure that hunk headers accurately represent the line ranges shown, even when parts of method bodies are omitted, maintaining compatibility with unified diff parsers while clearly marking omitted code.
 
-## 8. Pseudocode (Rust - Illustrative)
+## 9. Pseudocode (Rust - Illustrative)
 
 ```rust
 // Simplified and illustrative - not a complete implementation
@@ -151,7 +151,7 @@ fn apply_csharp_rules(hunks: &mut Vec<Hunk>, rule: &Rule) {
     // 2. Use a parser (Tree-sitter) to find *all* methods in the file
     let all_methods = find_all_methods(hunks);
 
-	// Include namespace and class declarations
+    // Include namespace and class declarations
     include_namespace_and_class_declarations(hunks);
 
     for method in &all_methods {
@@ -173,13 +173,29 @@ fn apply_csharp_rules(hunks: &mut Vec<Hunk>, rule: &Rule) {
                 }
             }
             if is_contextual {
-                include_method_signature(hunks, method);
-                replace_method_body_with_placeholder(hunks, method); // Always replace body for contextual methods
+                include_method_signature(hunks, method, true); // Mark as context
+                // Handle contextual method body (new logic)
+                let body_lines = get_method_body_lines(hunks, method); // Helper function
+                if body_lines.len() <= 2 * rule.context_lines {
+                    // Include the entire body, marking each line as context.
+                    for line in body_lines {
+                        include_context_line(hunks, line); //Helper to mark with " "
+                    }
+                } else {
+                    // Include first and last context_lines, with a placeholder.
+                    for line in body_lines.iter().take(rule.context_lines) {
+                        include_context_line(hunks, line.to_string());
+                    }
+                    include_context_line(hunks, "// { ... }".to_string());
+                    for line in body_lines.iter().rev().take(rule.context_lines).rev() {
+                        include_context_line(hunks, line.to_string());
+                    }
+                }
             }
         }
     }
 
-    // 4. Handle "other code" (Point 7)
+    // 4. Handle "other code"
     handle_other_code(hunks, rule.context_lines);
 
     // 5. Adjust Hunk Headers: VERY IMPORTANT. After all modifications, adjust hunk headers.
@@ -205,8 +221,10 @@ fn calculate_context_range(method: &MethodInfo, context_lines: usize) -> (usize,
 fn is_method_within_context_range(method: &MethodInfo, range: &(usize, usize)) -> bool { /* ... */ }
 fn include_full_method_body(hunks: &mut Vec<Hunk>, method: &MethodInfo) { /* ... */ }
 fn replace_method_body_with_placeholder(hunks: &mut Vec<Hunk>, method: &MethodInfo) { /* ... */ }
-fn include_method_signature(hunks: &mut Vec<Hunk>, method: &MethodInfo) { /* ... */ }
+fn include_method_signature(hunks: &mut Vec<Hunk>, method: &MethodInfo, is_context: bool) { /* ... */ }
 fn include_namespace_and_class_declarations(hunks: &mut Vec<Hunk>) { /* ... */ }
+fn get_method_body_lines(hunks: &Vec<Hunk>, method: &MethodInfo) -> Vec<String> { /* ... */ }
+fn include_context_line(hunks: &mut Vec<Hunk>, line: String) { /* ... */ }
 fn handle_other_code(hunks: &mut Vec<Hunk>, context_lines: usize) { /* ... */ }
 fn adjust_hunk_headers(hunks: &mut Vec<Hunk>) {/* ... */ }
 fn apply_context_filter(hunks: &mut Vec<Hunk>, context_lines: usize) {/* ... */ } //Helper for non .cs files
@@ -221,7 +239,7 @@ struct MethodInfo {
 }
 ```
 
-## 9. Performance
+## 10. Performance
 
 *   **Single Git Command:** Efficient for a moderate number of changed files (e.g., 20-100).
 *   **In-Memory Post-Processing:** The Rust implementation should be performant, with the most significant overhead likely coming from parsing (especially with Tree-sitter).  Efficient data structures and algorithms should be used.

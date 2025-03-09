@@ -25,6 +25,8 @@ pub struct CSharpFile {
     pub using_statements: Vec<(usize, usize)>, // (start_line, end_line)
     /// Class declarations in the file
     pub class_declarations: Vec<(usize, usize)>, // (start_line, end_line)
+    /// Namespace declarations in the file
+    pub namespace_declarations: Vec<(usize, usize)>, // (start_line, end_line)
 }
 
 /// Parser for C# code that extracts method information
@@ -54,6 +56,7 @@ impl CSharpParser {
             methods: Vec::new(),
             using_statements: Vec::new(),
             class_declarations: Vec::new(),
+            namespace_declarations: Vec::new(),
         };
 
         self.find_nodes(root_node, code, &mut file);
@@ -152,6 +155,11 @@ impl CSharpParser {
                 let start_line = node.start_position().row + 1;
                 let end_line = node.end_position().row + 1;
                 file.using_statements.push((start_line, end_line));
+            },
+            "namespace_declaration" => {
+                let start_line = node.start_position().row + 1;
+                let end_line = node.end_position().row + 1;
+                file.namespace_declarations.push((start_line, end_line));
             },
             "class_declaration" => {
                 let start_line = node.start_position().row + 1;

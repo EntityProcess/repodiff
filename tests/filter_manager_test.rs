@@ -256,6 +256,183 @@ fn test_csharp_method_and_property_parsing() {
     assert!(arrow_result.lines.iter().any(|l| l.contains("myField + 1")));
 }
 
+// Helper function to convert a raw string to lines with proper indentation
+fn raw_to_lines(s: &str) -> Vec<String> {
+    s.lines()
+        .skip(1) // Skip the initial empty line
+        .map(|line| {
+            if line.trim().is_empty() {
+                String::new()
+            } else if line.starts_with('-') || line.starts_with('+') {
+                // For diff lines, preserve the marker and the indentation after it
+                let marker = &line[0..1];
+                let rest = &line[1..];
+                format!("{}{}", marker, rest)
+            } else {
+                line.to_string()
+            }
+        })
+        .collect()
+}
+
+#[test]
+fn test_include_signatures_and_method_body() {
+    let filters = vec![
+        FilterRule {
+            file_pattern: "*.cs".to_string(),
+            context_lines: 3,
+            include_method_body: true,
+            include_signatures: true,
+        },
+    ];
+    
+    let mut filter_manager = FilterManager::new(&filters);
+    let mut patch_dict = HashMap::new();
+    
+    let hunk = Hunk {
+        header: "@@ -1,60 +1,60 @@".to_string(), // Updated line count to account for Method4
+        old_start: 1,
+        old_count: 60,
+        new_start: 1,
+        new_count: 60,
+        lines: raw_to_lines(r#"
+namespace Test {
+    public class MyClass {
+        public void Method1() {
+            int x = 1;
+-           Console.WriteLine(x);
++           Console.WriteLine(x + 1);
+            int y = 2;
+        }
+
+        public void Method2() {
+            // Initialize variables
+            bool flag = true;
+            int counter = 0;
+
+            // Complex logic block
+            if (flag) {
+                for (int i = 0; i < 10; i++) {
+                    counter++;
+                }
+            }
+
+            // Final processing
+            if (counter > 5) {
+                return;
+            }
+        }
+
+        public void Method3() {
+            // Initial setup
+            var setup = true;
+            var items = new List<int>();
+
+            // Some processing
+            var result = Process(items);
+
+            // Complex logic block
+-           if (setup) {
++           if (setup && items.Any()) {
+                for (int i = 0; i < 10; i++) {
+                    counter++;
++                   items.Add(i);
+                }
+            }
+
+            // Final cleanup
+            items.Clear();
+        }
+
+        public void Method4() {
+            // Initial setup
+            var setup = true;
+            var items = new List<int>();
+
+            // Some processing
+            var result = Process(items);
+
+            // Complex logic block
+            if (setup) {
+                items.Add(42);
+            }
+        }
+    }
+}"#),
+        is_rename: false,
+        rename_from: None,
+        rename_to: None,
+        similarity_index: None,
+    };
+    
+    patch_dict.insert("test.cs".to_string(), vec![hunk]);
+    
+    let processed = filter_manager.post_process_files(&patch_dict);
+    let processed_hunks = &processed["test.cs"];
+    
+    println!("Actual lines:");
+    for line in &processed_hunks[0].lines {
+        println!("  {:?}", line);
+    }
+    
+    let expected_lines = raw_to_lines(r#"
+namespace Test {
+    public class MyClass {
+        public void Method1() {
+            int x = 1;
+-           Console.WriteLine(x);
++           Console.WriteLine(x + 1);
+            int y = 2;
+        }
+
+        public void Method2() {
+            // Initialize variables
+            bool flag = true;
+            int counter = 0;
+ // { ... }
+            // Final processing
+            if (counter > 5) {
+                return;
+            }
+        }
+
+        public void Method3() {
+            // Initial setup
+            var setup = true;
+            var items = new List<int>();
+
+            // Some processing
+            var result = Process(items);
+
+            // Complex logic block
+-           if (setup) {
++           if (setup && items.Any()) {
+                for (int i = 0; i < 10; i++) {
+                    counter++;
++                   items.Add(i);
+                }
+            }
+
+            // Final cleanup
+            items.Clear();
+        }
+
+        public void Method4() {
+            // Initial setup
+            var setup = true;
+            var items = new List<int>();
+ // { ... }
+            // Complex logic block
+            if (setup) {
+                items.Add(42);
+            }
+        }
+    }
+}"#);
+    
+    assert_eq!(processed_hunks[0].lines, expected_lines);
+}
+
 // Helper function to create a test hunk
 fn create_test_hunk() -> Hunk {
     Hunk {
