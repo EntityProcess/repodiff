@@ -153,7 +153,7 @@ fn test_csharp_method_and_property_parsing() {
             file_pattern: "*.cs".to_string(),
             context_lines: 3,
             include_method_body: true,
-            include_signatures: true,
+            include_signatures: false,
         },
     ];
     
@@ -167,17 +167,16 @@ fn test_csharp_method_and_property_parsing() {
         old_count: 10,
         new_start: 1,
         new_count: 10,
-        lines: vec![
-            "namespace Test {".to_string(),
-            "    public class MyClass {".to_string(),
-            "        public void MyMethod() {".to_string(),
-            "            int x = 1;".to_string(),
-            "-           Console.WriteLine(x);".to_string(),
-            "+           Console.WriteLine(x + 1);".to_string(),
-            "        }".to_string(),
-            "    }".to_string(),
-            "}".to_string(),
-        ],
+        lines: raw_to_lines(r#"
+namespace Test {
+    public class MyClass {
+        public void MyMethod() {
+            int x = 1;
+-           Console.WriteLine(x);
++           Console.WriteLine(x + 1);
+        }
+    }
+}"#),
         is_rename: false,
         rename_from: None,
         rename_to: None,
@@ -191,21 +190,20 @@ fn test_csharp_method_and_property_parsing() {
         old_count: 15,
         new_start: 1,
         new_count: 15,
-        lines: vec![
-            "namespace Test {".to_string(),
-            "    public class MyClass {".to_string(),
-            "        public int MyProperty".to_string(),
-            "        {".to_string(),
-            "            get { return myField; }".to_string(),
-            "            set".to_string(),
-            "            {".to_string(),
-            "-               myField = value;".to_string(),
-            "+               myField = value + 1;".to_string(),
-            "            }".to_string(),
-            "        }".to_string(),
-            "    }".to_string(),
-            "}".to_string(),
-        ],
+        lines: raw_to_lines(r#"
+namespace Test {
+    public class MyClass {
+        public int MyProperty
+        {
+            get { return myField; }
+            set
+            {
+-               myField = value;
++               myField = value + 1;
+            }
+        }
+    }
+}"#),
         is_rename: false,
         rename_from: None,
         rename_to: None,
@@ -219,14 +217,13 @@ fn test_csharp_method_and_property_parsing() {
         old_count: 10,
         new_start: 1,
         new_count: 10,
-        lines: vec![
-            "namespace Test {".to_string(),
-            "    public class MyClass {".to_string(),
-            "-       public int QuickProperty => myField;".to_string(),
-            "+       public int QuickProperty => myField + 1;".to_string(),
-            "    }".to_string(),
-            "}".to_string(),
-        ],
+        lines: raw_to_lines(r#"
+namespace Test {
+    public class MyClass {
+-       public int QuickProperty => myField;
++       public int QuickProperty => myField + 1;
+    }
+}"#),
         is_rename: false,
         rename_from: None,
         rename_to: None,
