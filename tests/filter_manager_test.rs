@@ -147,7 +147,7 @@ fn test_post_process_files_with_complex_patterns() {
 }
 
 #[test]
-fn test_csharp_method_and_property_parsing() {
+fn test_csharp_method_body_inclusion() {
     let filters = vec![
         FilterRule {
             file_pattern: "*.cs".to_string(),
@@ -183,7 +183,31 @@ namespace Test {
         similarity_index: None,
     };
     
-    // Test property with accessors
+    patch_dict.insert("Method.cs".to_string(), vec![method_hunk]);
+    let processed = filter_manager.post_process_files(&patch_dict);
+    
+    // When include_method_body is true, we should see the entire method
+    let method_result = &processed["Method.cs"][0];
+    assert!(method_result.lines.iter().any(|l| l.contains("public void MyMethod()")));
+    assert!(method_result.lines.iter().any(|l| l.contains("int x = 1")));
+    assert!(method_result.lines.iter().any(|l| l.contains("Console.WriteLine(x + 1)")));
+}
+
+#[test]
+fn test_csharp_property_body_inclusion() {
+    let filters = vec![
+        FilterRule {
+            file_pattern: "*.cs".to_string(),
+            context_lines: 3,
+            include_method_body: true,
+            include_signatures: false,
+        },
+    ];
+    
+    let mut filter_manager = FilterManager::new(&filters);
+    let mut patch_dict = HashMap::new();
+    
+    // Test property with accessors where setter is changed
     let property_hunk = Hunk {
         header: "@@ -1,15 +1,15 @@".to_string(),
         old_start: 1,
@@ -210,6 +234,32 @@ namespace Test {
         similarity_index: None,
     };
     
+    patch_dict.insert("Property.cs".to_string(), vec![property_hunk]);
+    let processed = filter_manager.post_process_files(&patch_dict);
+    
+    // When include_method_body is true and a property accessor is changed,
+    // we should see the entire property including its signature and all accessors
+    let property_result = &processed["Property.cs"][0];
+    assert!(property_result.lines.iter().any(|l| l.contains("public int MyProperty")));
+    assert!(property_result.lines.iter().any(|l| l.contains("get { return myField; }")));
+    assert!(property_result.lines.iter().any(|l| l.contains("set")));
+    assert!(property_result.lines.iter().any(|l| l.contains("myField = value + 1")));
+}
+
+#[test]
+fn test_csharp_arrow_property_inclusion() {
+    let filters = vec![
+        FilterRule {
+            file_pattern: "*.cs".to_string(),
+            context_lines: 3,
+            include_method_body: true,
+            include_signatures: false,
+        },
+    ];
+    
+    let mut filter_manager = FilterManager::new(&filters);
+    let mut patch_dict = HashMap::new();
+    
     // Test arrow expression property
     let arrow_property_hunk = Hunk {
         header: "@@ -1,10 +1,10 @@".to_string(),
@@ -230,24 +280,11 @@ namespace Test {
         similarity_index: None,
     };
     
-    patch_dict.insert("Method.cs".to_string(), vec![method_hunk]);
-    patch_dict.insert("Property.cs".to_string(), vec![property_hunk]);
     patch_dict.insert("ArrowProperty.cs".to_string(), vec![arrow_property_hunk]);
-    
     let processed = filter_manager.post_process_files(&patch_dict);
     
-    // Check method processing
-    let method_result = &processed["Method.cs"][0];
-    assert!(method_result.lines.iter().any(|l| l.contains("public void MyMethod()")));
-    assert!(method_result.lines.iter().any(|l| l.contains("Console.WriteLine(x + 1)")));
-    
-    // Check property processing
-    let property_result = &processed["Property.cs"][0];
-    assert!(property_result.lines.iter().any(|l| l.contains("public int MyProperty")));
-    assert!(property_result.lines.iter().any(|l| l.contains("get { return myField; }")));
-    assert!(property_result.lines.iter().any(|l| l.contains("myField = value + 1")));
-    
-    // Check arrow property processing
+    // When include_method_body is true and an arrow property is changed,
+    // we should see the entire property
     let arrow_result = &processed["ArrowProperty.cs"][0];
     assert!(arrow_result.lines.iter().any(|l| l.contains("public int QuickProperty =>")));
     assert!(arrow_result.lines.iter().any(|l| l.contains("myField + 1")));
