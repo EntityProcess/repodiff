@@ -475,6 +475,65 @@ namespace Test {
     assert_eq!(processed_hunks[0].lines, expected_lines);
 }
 
+#[test]
+fn test_class_declaration_respects_context_lines() {
+    let filters = vec![
+        FilterRule {
+            file_pattern: "*.cs".to_string(),
+            context_lines: 3, // Small context to test boundary
+            include_method_body: true,
+            include_signatures: false,
+        },
+    ];
+    
+    let mut filter_manager = FilterManager::new(&filters);
+    let mut patch_dict = HashMap::new();
+    
+    // Create a test where the class declaration is far from the changed line
+    let hunk = Hunk {
+        header: "@@ -1,20 +1,20 @@".to_string(),
+        old_start: 1,
+        old_count: 20,
+        new_start: 1,
+        new_count: 20,
+        lines: raw_to_lines(r#"
+namespace Test {
+    public class MyClass {
+        // Many lines of code...
+        private int field1;
+        private int field2;
+        private int field3;
+        private int field4;
+        private int field5;
+        public int MyProperty
+        {
+            get { return field1; }
+            set
+            {
+-               field1 = value;
++               field1 = value + 1;
+            }
+        }
+    }
+}"#),
+        is_rename: false,
+        rename_from: None,
+        rename_to: None,
+        similarity_index: None,
+    };
+    
+    patch_dict.insert("ClassDeclaration.cs".to_string(), vec![hunk]);
+    let processed = filter_manager.post_process_files(&patch_dict);
+    
+    // The class declaration should not be included since it's more than 3 lines away from the change
+    let result = &processed["ClassDeclaration.cs"][0];
+    assert!(!result.lines.iter().any(|l| l.contains("public class MyClass")));
+    
+    // But we should still see the property and the change
+    assert!(result.lines.iter().any(|l| l.contains("public int MyProperty")));
+    assert!(result.lines.iter().any(|l| l.contains("field1 = value + 1")));
+}
+
 // Helper function to create a test hunk
 fn create_test_hunk() -> Hunk {
     Hunk {

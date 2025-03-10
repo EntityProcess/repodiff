@@ -197,12 +197,15 @@ impl FilterManager {
                 } else {
                     // Check if line is part of a namespace/class declaration that encloses a changed method
                     let in_enclosing_declaration = file_info.class_declarations.iter()
-                        // For now, just check class declarations since namespace_declarations isn't available
                         .any(|(start, end)| {
                             // Check if this declaration encloses any changed method
                             changed_methods.iter().any(|m| {
-                                m.start_line >= *start && m.end_line <= *end && 
-                                current_line == *start // Only include the declaration line itself
+                                // The declaration must enclose the method
+                                m.start_line >= *start && m.end_line <= *end &&
+                                // The declaration line must be within context_lines of the method
+                                current_line == *start && // Only include the declaration line itself
+                                (m.start_line.saturating_sub(rule.context_lines) <= current_line &&
+                                 current_line <= m.end_line + rule.context_lines)
                             })
                         });
 
