@@ -71,12 +71,14 @@ RepoDiff uses a `config.json` file in the project root directory. Example config
   "tiktoken_model": "gpt-4o",
   "filters": [
     {
-      "file_pattern": "*.cs",
-      "context_lines": 999
+      "file_pattern": "*Test*.cs",
+      "context_lines": 1
     },
     {
-      "file_pattern": "*Test*.cs",
-      "context_lines": 200
+      "file_pattern": "*.cs",
+      "context_lines": 10,
+      "include_method_body": true,
+      "include_signatures": true
     },
     {
       "file_pattern": "*.xml",
@@ -96,6 +98,8 @@ Configuration options:
 * `filters`: An array of filter rules that determine how different files are processed.
   * `file_pattern`: Glob pattern to match files (e.g., "*.cs", "*Test*.cs").
   * `context_lines`: Number of context lines to show around changes (default: 3).
+  * `include_method_body`: When true, includes the entire method body in the diff output when a change is detected within a method. This helps provide complete context for method-level changes.
+  * `include_signatures`: When true, includes method signatures and class declarations in the diff output even if they haven't changed. This helps maintain readability by showing the structural context of the changes.
 
 Filter rules are applied in order, with the first matching pattern being used.
 
