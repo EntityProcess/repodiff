@@ -55,7 +55,14 @@ impl RepoDiff {
         // Parse and process the diff
         let patch_dict = DiffParser::parse_unified_diff(&raw_diff)?;
         let processed_dict = self.filter_manager.post_process_files(&patch_dict);
-        let final_output = DiffParser::reconstruct_patch(&processed_dict);
+        
+        // Get filters as JSON if available
+        let filters_json = self.filter_manager.get_filters_json();
+        
+        let final_output = DiffParser::reconstruct_patch(
+            &processed_dict,
+            filters_json.as_deref()
+        );
         
         // Create output directory if it doesn't exist
         if let Some(parent) = Path::new(output_file).parent() {

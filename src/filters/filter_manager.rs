@@ -3,6 +3,7 @@ use fnmatch_regex::glob_to_regex;
 use crate::utils::config_manager::FilterRule;
 use crate::utils::diff_parser::Hunk;
 use crate::filters::csharp_parser::{CSharpParser, CSharpMethod};
+use serde_json;
 
 /// Manages file pattern filters for controlling context lines in git diffs
 pub struct FilterManager {
@@ -294,5 +295,27 @@ impl FilterManager {
             content.push('\n');
         }
         content
+    }
+
+    /// Get the include_method_body value from the first filter rule
+    /// 
+    /// Returns None if there are no filter rules
+    pub fn get_include_method_body(&self) -> Option<bool> {
+        if self.filters.is_empty() {
+            return None;
+        }
+        // Return true if any filter has include_method_body set to true
+        let result = self.filters.iter().any(|rule| rule.include_method_body);
+        Some(result)
+    }
+
+    /// Get the filters as a JSON string
+    /// 
+    /// Returns None if there are no filter rules
+    pub fn get_filters_json(&self) -> Option<String> {
+        if self.filters.is_empty() {
+            return None;
+        }
+        serde_json::to_string_pretty(&self.filters).ok()
     }
 } 
