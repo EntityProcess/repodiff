@@ -198,7 +198,7 @@ fn test_csharp_property_body_inclusion() {
     let filters = vec![
         FilterRule {
             file_pattern: "*.cs".to_string(),
-            context_lines: 3,
+            context_lines: 3,  // Small context to test boundary
             include_method_body: true,
             include_signatures: false,
         },
@@ -207,27 +207,60 @@ fn test_csharp_property_body_inclusion() {
     let mut filter_manager = FilterManager::new(&filters);
     let mut patch_dict = HashMap::new();
     
-    // Test property with accessors where setter is changed
+    // Test property with accessors where setter is changed, with other code around it
     let property_hunk = Hunk {
-        header: "@@ -1,15 +1,15 @@".to_string(),
+        header: "@@ -1,40 +1,40 @@".to_string(),
         old_start: 1,
-        old_count: 15,
+        old_count: 40,
         new_start: 1,
-        new_count: 15,
+        new_count: 40,
         lines: raw_to_lines(r#"
 using System;
 
 namespace Test {
     public class MyClass {
-        private int myField;
+        // Some fields that should not be included (too far from change)
+        private int field1;
+        private int field2;
+        private int field3;
+        
+        // A method that should not be included (too far from change)
+        public void SomeMethod()
+        {
+            Console.WriteLine("Hello");
+        }
+
+        // Property with change in setter
         public int MyProperty
         {
-            get { return myField; }
+            get 
+            { 
+                // Complex getter logic
+                var temp = myField;
+                if (temp < 0)
+                {
+                    temp = 0;
+                }
+                return temp;
+            }
             set
             {
+                // Validation logic
+                if (value < 0)
+                {
+                    throw new ArgumentException("Value cannot be negative");
+                }
 -               myField = value;
 +               myField = value + 1;
+                // Post-processing
+                OnPropertyChanged();
             }
+        }
+
+        // Another method that should not be included (too far from change)
+        public void AnotherMethod()
+        {
+            Console.WriteLine("Goodbye");
         }
     }
 }"#),
@@ -240,13 +273,39 @@ namespace Test {
     patch_dict.insert("Property.cs".to_string(), vec![property_hunk]);
     let processed = filter_manager.post_process_files(&patch_dict);
     
-    // When include_method_body is true and a property accessor is changed,
-    // we should see the entire property including its signature and all accessors
     let property_result = &processed["Property.cs"][0];
+    
+    // Print the actual output for manual verification
+    println!("\nActual processed output:");
+    println!("------------------------");
+    println!("Header: {}", property_result.header);
+    println!("Lines:");
+    for (i, line) in property_result.lines.iter().enumerate() {
+        println!("{:3}: {}", i + 1, line);
+    }
+    println!("------------------------\n");
+    
+    // The entire property body should be included because include_method_body is true
     assert!(property_result.lines.iter().any(|l| l.contains("public int MyProperty")));
-    assert!(property_result.lines.iter().any(|l| l.contains("get { return myField; }")));
+    assert!(property_result.lines.iter().any(|l| l.contains("get")));
+    assert!(property_result.lines.iter().any(|l| l.contains("var temp = myField")));
+    assert!(property_result.lines.iter().any(|l| l.contains("if (temp < 0)")));
+    assert!(property_result.lines.iter().any(|l| l.contains("return temp")));
     assert!(property_result.lines.iter().any(|l| l.contains("set")));
+    assert!(property_result.lines.iter().any(|l| l.contains("if (value < 0)")));
     assert!(property_result.lines.iter().any(|l| l.contains("myField = value + 1")));
+    assert!(property_result.lines.iter().any(|l| l.contains("OnPropertyChanged")));
+
+    // Code outside the property should NOT be included since it's beyond context_lines
+    assert!(!property_result.lines.iter().any(|l| l.contains("private int field1")));
+    assert!(!property_result.lines.iter().any(|l| l.contains("SomeMethod")));
+    assert!(!property_result.lines.iter().any(|l| l.contains("AnotherMethod")));
+    
+    // Count the number of lines that are field declarations or other methods
+    let outside_lines = property_result.lines.iter()
+        .filter(|l| l.contains("field") || l.contains("Method"))
+        .count();
+    assert_eq!(outside_lines, 0, "Found {} lines from outside the property when they should have been excluded", outside_lines);
 }
 
 #[test]
