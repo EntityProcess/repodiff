@@ -173,9 +173,11 @@ fn test_filter_hunk_context_lines() {
         repodiff::utils::config_manager::FilterRule {
             file_pattern: "*".to_string(),
             context_lines: 2,
+            include_method_body: false,
+            include_signatures: false,
         }
     ];
-    let filter_manager = repodiff::filters::filter_manager::FilterManager::new(&filter_rules);
+    let mut filter_manager = repodiff::filters::filter_manager::FilterManager::new(&filter_rules);
     
     // Apply filtering
     let filtered_hunks = filter_manager.post_process_files(&std::collections::HashMap::from([

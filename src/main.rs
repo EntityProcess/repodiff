@@ -7,9 +7,7 @@ mod utils {
     pub mod git_operations;
     pub mod token_counter;
 }
-mod filters {
-    pub mod filter_manager;
-}
+pub mod filters;
 
 fn main() {
     if let Err(e) = cli::run() {

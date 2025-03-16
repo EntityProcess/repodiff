@@ -2,12 +2,12 @@
   "tiktoken_model": "gpt-4o",
   "filters": [
     {
-      "file_pattern": "*.cs",
-      "context_lines": 999
-    },
-    {
       "file_pattern": "*Test*.cs",
       "context_lines": 200
+    },
+    {
+      "file_pattern": "*.cs",
+      "context_lines": 999
     },
     {
       "file_pattern": "*.xml",

@@ -1,7 +1,7 @@
 [package]
 name = "repodiff"
 version = "0.3.0"
-edition = "2021"
+edition = "2024"
 authors = ["RepoDiff Team"]
 description = "A tool for generating optimized git diffs for LLM analysis"
 
@@ -14,3 +14,5 @@ tempfile = "3.10.0"
 tiktoken-rs = "0.5.8"
 fnmatch-regex = "0.2.0"
 thiserror = "1.0.57"
+tree-sitter = "0.20.10"
+tree-sitter-c-sharp = "0.20.0"

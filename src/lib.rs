@@ -8,6 +8,7 @@ pub mod utils {
 
 pub mod filters {
     pub mod filter_manager;
+    pub mod csharp_parser;
 }
 
 pub mod error;

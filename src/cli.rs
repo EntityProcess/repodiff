@@ -31,7 +31,7 @@ pub fn run() -> Result<()> {
     let args = Args::parse();
     
     // Initialize the RepoDiff tool
-    let repodiff = RepoDiff::new("config.json")?;
+    let mut repodiff = RepoDiff::new("config.json")?;
     let git_ops = GitOperations::new();
     
     // Determine the commit hashes
