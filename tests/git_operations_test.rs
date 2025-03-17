@@ -210,4 +210,60 @@ fn test_get_latest_common_commit_with_branch() {
     
     // The common ancestor should be the initial commit
     assert_eq!(ancestor, initial_commit);
+}
+
+#[test]
+#[ignore] // Ignore by default as it requires git to be installed
+fn test_get_previous_commit() {
+    let temp_dir = setup_test_repo();
+    let repo_path = temp_dir.path();
+    
+    // Get the initial commit hash
+    let output = Command::new("git")
+        .args(["rev-parse", "HEAD"])
+        .current_dir(repo_path)
+        .output()
+        .expect("Failed to get commit hash");
+    
+    let initial_commit = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    
+    // Modify the file and create a new commit
+    let file_path = repo_path.join("file1.txt");
+    fs::write(&file_path, "Modified content").expect("Failed to modify file");
+    
+    Command::new("git")
+        .args(["add", "file1.txt"])
+        .current_dir(repo_path)
+        .output()
+        .expect("Failed to add modified file");
+    
+    Command::new("git")
+        .args(["commit", "-m", "Second commit"])
+        .current_dir(repo_path)
+        .output()
+        .expect("Failed to commit modified file");
+    
+    // Get the second commit hash
+    let output = Command::new("git")
+        .args(["rev-parse", "HEAD"])
+        .current_dir(repo_path)
+        .output()
+        .expect("Failed to get second commit hash");
+    
+    let second_commit = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    
+    // Test the get_previous_commit function
+    let git_operations = GitOperations::new();
+    
+    // Change to the repo directory for the test
+    let current_dir = std::env::current_dir().unwrap();
+    std::env::set_current_dir(repo_path).unwrap();
+    
+    let previous_commit = git_operations.get_previous_commit(&second_commit).unwrap();
+    
+    // Change back to the original directory
+    std::env::set_current_dir(current_dir).unwrap();
+    
+    // The previous commit should be the initial commit
+    assert_eq!(previous_commit, initial_commit);
 } 

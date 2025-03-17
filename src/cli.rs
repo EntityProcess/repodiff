@@ -24,6 +24,10 @@ pub struct Args {
     /// Compare the latest commit on the current branch to the latest common commit with another branch
     #[arg(short, long)]
     pub branch: Option<String>,
+
+    /// Compare the specified commit with its parent (previous) commit
+    #[arg(short = 'p', long = "previous", requires = "commit1", conflicts_with_all = ["commit2", "branch"])]
+    pub use_previous: bool,
 }
 
 /// Main entry point for the CLI
@@ -48,9 +52,21 @@ pub fn run() -> Result<()> {
         );
         
         (commit1, commit2)
+    } else if args.use_previous && args.commit1.is_some() {
+        let commit2 = args.commit1.clone().unwrap();
+        let commit1 = git_ops.get_previous_commit(&commit2)?;
+        
+        // Print the commits being used for the comparison
+        println!(
+            "Comparing commit {} with its parent commit {}.",
+            &commit2[..12.min(commit2.len())],
+            &commit1[..12.min(commit1.len())]
+        );
+        
+        (commit1, commit2)
     } else {
         if args.commit1.is_none() || args.commit2.is_none() {
-            eprintln!("You must either provide two commit hashes using --commit1 and --commit2, or use the -b option to compare against another branch.");
+            eprintln!("You must either provide two commit hashes using --commit1 and --commit2, or use the -b option to compare against another branch, or use -p with -c to compare with the previous commit.");
             process::exit(1);
         }
         

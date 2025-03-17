@@ -54,10 +54,17 @@ repodiff -b main -o output.txt
 repodiff -c abc1234 -d 5678def -o output.txt
 ```
 
+### Compare a Commit with its Parent (Previous) Commit
+
+```bash
+repodiff -c abc1234 -p -o output.txt
+```
+
 Parameters:
 * `-b`, `--branch`: Branch to compare with (e.g., `main` or `master`)
 * `-c`, `--commit1`: First commit hash
 * `-d`, `--commit2`: Second commit hash
+* `-p`, `--previous`: Compare the specified commit (via `-c`) with its parent commit
 * `-o`, `--output_file`: (Optional) Path to the output file. If not provided, the diff will be written to a default file in the system's temporary directory.
 * `-v`, `--version`: Display the current version of RepoDiff
 * `-h`, `--help`: Print help information

@@ -13,6 +13,7 @@ RepoDiff generates a simplified and context-aware unified diff of a Git reposito
     * **Context Lines** Defines the context for including the surrounding signatures.
 3.  **User-Friendly Output:** Generate a valid unified diff with clear placeholders (e.g., `⋮----`) indicating omitted code sections and an instructional header explaining the conventions.
 4. **Configurable**: Allow users to set the config via a json file.
+5. **Flexible Commit Comparison**: Support various ways to compare commits, including comparing a specific commit with its parent commit.
 
 ## 3. Example Configuration
 
@@ -70,8 +71,8 @@ This section details the handling of C# (`*.cs`) files.
 *   **Behavior Summary:**
 
     1. **Changed Methods:**
-       * If `include_method_body` is `true`: Include the entire body of each changed method
-       * If `include_method_body` is `false`: Replace the body with `⋮----`
+       * If `include_method_body` is `true`, Include the entire body of each changed method
+       * If `include_method_body` is `false`, Replace the body with `⋮----`
 
     2. **Contextual Methods:**
        * If `include_signatures` is `true`: 
@@ -129,136 +130,3 @@ This section details the handling of C# (`*.cs`) files.
 Include a header in the final diff explaining placeholders:
 
 ```
-NOTE: Some method bodies have been replaced with "⋮----" to improve clarity for code reviews and LLM analysis.
-
-- The "⋮----" placeholder indicates that a method body has been omitted or truncated based on the configuration settings.
-- include_method_body: true, will cause the entire method to be included.
-- include_signatures: true, will include the signatures of methods that surround the changed method.
-```
-## 8. Output Format
-Generate a valid unified diff with adjusted hunk headers to reflect the included lines.  Insert placeholder lines like `// ⋮----` (prefixed with a space as a context line) *within contextual methods* to indicate omitted code sections when the body exceeds `2 * context_lines` lines. Ensure that hunk headers accurately represent the line ranges shown, even when parts of method bodies are omitted, maintaining compatibility with unified diff parsers while clearly marking omitted code.
-
-## 9. Pseudocode (Rust - Illustrative)
-
-```rust
-// Simplified and illustrative - not a complete implementation
-
-fn generate_single_pass_diff(commit1: &str, commit2: &str) -> Result<String> {
-    GitOperations::run_git_diff(commit1, commit2, 999999) // Large unified context
-}
-
-fn parse_unified_diff(diff_output: &str) -> Result<HashMap<String, Vec<Hunk>>> {
-    DiffParser::parse(diff_output) // Parses into a structured representation
-}
-
-fn post_process_files(patch_dict: &mut HashMap<String, Vec<Hunk>>, config: &Config) {
-    for (filename, hunks) in patch_dict.iter_mut() {
-        if let Some(rule) = config.find_matching_rule(filename) {
-            if rule.file_pattern.ends_with(".cs") {
-                apply_csharp_rules(hunks, rule);
-            } else {
-                apply_context_filter(hunks, rule.context_lines); // For other file types
-            }
-        }
-    }
-}
-
-fn apply_csharp_rules(hunks: &mut Vec<Hunk>, rule: &Rule) {
-    // 1. Find changed methods
-    let changed_methods = find_changed_methods(hunks);
-
-    // 2. Use a parser (Tree-sitter) to find *all* methods in the file
-    let all_methods = find_all_methods(hunks);
-
-    // Include namespace and class declarations
-    include_namespace_and_class_declarations(hunks);
-
-    for method in &all_methods {
-        if changed_methods.contains(method) {
-            // 3. Handle changed method body based on include_method_body
-            if rule.include_method_body {
-                include_full_method_body(hunks, method);
-            } else {
-                replace_method_body_with_placeholder(hunks, method);
-            }
-        } else if rule.include_signatures {
-           // Check if this is a contextual method
-            let mut is_contextual = false;
-            for changed_method in &changed_methods{
-                let context_range = calculate_context_range(changed_method, rule.context_lines);
-                if is_method_within_context_range(method, &context_range) {
-                    is_contextual = true;
-                    break;
-                }
-            }
-            if is_contextual {
-                include_method_signature(hunks, method, true); // Mark as context
-                // Handle contextual method body (new logic)
-                let body_lines = get_method_body_lines(hunks, method); // Helper function
-                if body_lines.len() <= 2 * rule.context_lines {
-                    // Include the entire body, marking each line as context.
-                    for line in body_lines {
-                        include_context_line(hunks, line); //Helper to mark with " "
-                    }
-                } else {
-                    // Include first and last context_lines, with a placeholder.
-                    for line in body_lines.iter().take(rule.context_lines) {
-                        include_context_line(hunks, line.to_string());
-                    }
-                    include_context_line(hunks, "// ⋮----".to_string());
-                    for line in body_lines.iter().rev().take(rule.context_lines).rev() {
-                        include_context_line(hunks, line.to_string());
-                    }
-                }
-            }
-        }
-    }
-
-    // 4. Handle "other code"
-    handle_other_code(hunks, rule.context_lines);
-
-    // 5. Adjust Hunk Headers: VERY IMPORTANT. After all modifications, adjust hunk headers.
-    adjust_hunk_headers(hunks);
-}
-
-fn main() -> Result<()> {
-    let config = Config::load("config.json")?;
-    let raw_diff = generate_single_pass_diff("commit1", "commit2")?;
-    let mut patch_dict = parse_unified_diff(&raw_diff)?;
-    post_process_files(&mut patch_dict, &config);
-
-    // Reconstruct the final unified diff output
-    let final_output = DiffParser::reconstruct_patch(&patch_dict);
-    println!("{}", final_output);
-    Ok(())
-}
-
-// Helper functions (placeholders - would need full implementation)
-fn find_changed_methods(hunks: &Vec<Hunk>) -> Vec<MethodInfo> { /* ... */ }
-fn find_all_methods(hunks: &Vec<Hunk>) -> Vec<MethodInfo>  { /* ... */ } // Uses parser
-fn calculate_context_range(method: &MethodInfo, context_lines: usize) -> (usize, usize) { /* ... */ }
-fn is_method_within_context_range(method: &MethodInfo, range: &(usize, usize)) -> bool { /* ... */ }
-fn include_full_method_body(hunks: &mut Vec<Hunk>, method: &MethodInfo) { /* ... */ }
-fn replace_method_body_with_placeholder(hunks: &mut Vec<Hunk>, method: &MethodInfo) { /* ... */ }
-fn include_method_signature(hunks: &mut Vec<Hunk>, method: &MethodInfo, is_context: bool) { /* ... */ }
-fn include_namespace_and_class_declarations(hunks: &mut Vec<Hunk>) { /* ... */ }
-fn get_method_body_lines(hunks: &Vec<Hunk>, method: &MethodInfo) -> Vec<String> { /* ... */ }
-fn include_context_line(hunks: &mut Vec<Hunk>, line: String) { /* ... */ }
-fn handle_other_code(hunks: &mut Vec<Hunk>, context_lines: usize) { /* ... */ }
-fn adjust_hunk_headers(hunks: &mut Vec<Hunk>) {/* ... */ }
-fn apply_context_filter(hunks: &mut Vec<Hunk>, context_lines: usize) {/* ... */ } //Helper for non .cs files
-
-// Struct to represent method information (example)
-struct MethodInfo {
-    start_line: usize,
-    end_line: usize,
-    signature_line: usize,
-    name: String,
-    // ... other relevant data ...
-}
-```
-
-## 10. Performance
-
-*   **Single Git Command:** Efficient for a moderate number of changed files (e.g., 20-100).
-*   **In-Memory Post-Processing:** The Rust implementation should be performant, with the most significant overhead likely coming from parsing (especially with Tree-sitter).  Efficient data structures and algorithms should be used.

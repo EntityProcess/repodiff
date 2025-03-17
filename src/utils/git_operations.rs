@@ -86,4 +86,30 @@ impl GitOperations {
 
         Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
     }
+
+    /// Get the previous commit of a given commit hash
+    ///
+    /// # Arguments
+    ///
+    /// * `commit` - The commit hash to get the previous commit for
+    ///
+    /// # Returns
+    ///
+    /// The hash of the previous commit
+    pub fn get_previous_commit(&self, commit: &str) -> Result<String> {
+        let output = Command::new("git")
+            .args(["rev-parse", &format!("{}^1", commit)])
+            .output()
+            .map_err(|e| RepoDiffError::GitError(format!("Failed to get previous commit for '{}': {}", commit, e)))?;
+
+        if !output.status.success() {
+            return Err(RepoDiffError::GitError(format!(
+                "Failed to get previous commit for '{}': {}",
+                commit,
+                String::from_utf8_lossy(&output.stderr)
+            )));
+        }
+
+        Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
+    }
 } 
