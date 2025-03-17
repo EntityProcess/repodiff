@@ -3,11 +3,13 @@
   "filters": [
     {
       "file_pattern": "*Test*.cs",
-      "context_lines": 200
+      "context_lines": 100
     },
     {
       "file_pattern": "*.cs",
-      "context_lines": 999
+      "context_lines": 500,
+      "include_method_body": true,
+      "include_signatures": false
     },
     {
       "file_pattern": "*.xml",
