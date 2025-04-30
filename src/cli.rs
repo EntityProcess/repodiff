@@ -17,15 +17,25 @@ pub struct Args {
     #[arg(short = 'c', long = "commit")]
     pub commit: Option<String>,
 
-    /// Compare the latest commit on the current branch to the latest common commit with another branch
+    /// Compare the current branch HEAD with the target branch HEAD.
+    /// Use --merge-base to compare with the common ancestor instead.
     #[arg(short, long, conflicts_with_all = ["commit", "previous"])]
     pub branch: Option<String>,
+
+    /// Compare with the common ancestor (merge-base) of the current and target branch
+    #[arg(short = 'a', long, requires = "branch")]
+    pub merge_base: bool,
 
     /// Compare the specified commit (--commit) with a previous commit.
     /// If a hash is provided, compare with that specific hash.
     /// If no hash is provided, compare with the parent of the commit specified by --commit.
     #[arg(short = 'p', long = "previous", value_name = "PREVIOUS_COMMIT_HASH", num_args = 0..=1, requires = "commit", conflicts_with = "branch")]
     pub previous: Option<Option<String>>,
+}
+
+/// Abbreviate commit hash for cleaner output
+fn short_hash(hash: &str) -> &str {
+    &hash[..12.min(hash.len())]
 }
 
 /// Main entry point for the CLI
@@ -36,55 +46,68 @@ pub fn run() -> Result<()> {
     let mut repodiff = RepoDiff::new("config.json")?;
     let git_ops = GitOperations::new();
     
-    // Determine the commit hashes based on provided arguments
-    let (commit1, commit2) = if let Some(branch) = args.branch {
-        // Branch comparison logic
-        let commit1 = git_ops.get_latest_common_commit_with_branch(&branch)?;
-        let commit2 = git_ops.get_latest_commit()?;
-        
-        println!(
-            "Comparing latest common commit with branch '{}' ({}) and the latest commit on the current branch ({}).",
-            branch,
-            &commit1[..12.min(commit1.len())],
-            &commit2[..12.min(commit2.len())]
-        );
-        (commit1, commit2)
+    // Validate arguments first
+    if args.branch.is_none() && args.commit.is_none() {
+        eprintln!("You must specify either a branch to compare (--branch [-a]) or a commit to compare (--commit -p).");
+        process::exit(1);
+    }
+    if args.commit.is_some() && args.previous.is_none() {
+        // This specific combination (--commit without --previous) is invalid
+         eprintln!("Missing comparison target. Use --previous (-p) to compare with a parent or specific commit when using --commit, or use --branch (-b) to compare with another branch.");
+         process::exit(1);
+    }
 
-    } else if let Some(commit_to_compare) = args.commit {
-        // Commit comparison logic (using --commit and --previous)
-        match args.previous {
-            Some(Some(prev_commit_hash)) => {
-                // -p <hash> provided: Compare commit_to_compare with prev_commit_hash
-                let commit1 = prev_commit_hash;
-                let commit2 = commit_to_compare;
-                println!(
-                    "Comparing specified commit {} with previous commit {}.",
-                    &commit2[..12.min(commit2.len())],
-                    &commit1[..12.min(commit1.len())]
-                );
-                (commit1, commit2)
-            }
-            Some(None) => {
-                // -p flag provided without value: Compare commit_to_compare with its parent
-                let commit2 = commit_to_compare;
-                let commit1 = git_ops.get_previous_commit(&commit2)?;
-                println!(
-                    "Comparing specified commit {} with its parent commit {}.",
-                    &commit2[..12.min(commit2.len())],
-                    &commit1[..12.min(commit1.len())]
-                );
-                (commit1, commit2)
-            }
-            None => {
-                // Only -c provided, which is not enough for comparison.
-                eprintln!("Missing comparison target. Use --previous (-p) to compare with a parent or specific commit when using --commit, or use --branch (-b) to compare with another branch.");
-                process::exit(1);
-            }
+    // Determine the commit hashes based on validated arguments
+    let (commit1, commit2): (String, String) = if let Some(branch) = args.branch {
+        // Branch comparison logic
+        let head_commit = git_ops.get_latest_commit()?;
+
+        if args.merge_base {
+            // Compare HEAD with merge-base
+            let base_commit = git_ops.find_merge_base(&branch)?;
+            println!(
+                "Comparing merge-base with branch '{}' ({}) and current HEAD ({}).",
+                branch,
+                short_hash(&base_commit),
+                short_hash(&head_commit)
+            );
+            (base_commit, head_commit)
+        } else {
+            // Compare HEAD with target branch HEAD
+            let branch_head_commit = git_ops.get_branch_head(&branch)?;
+            println!(
+                "Comparing target branch '{}' HEAD ({}) and current HEAD ({}).",
+                branch,
+                short_hash(&branch_head_commit),
+                short_hash(&head_commit)
+            );
+            (branch_head_commit, head_commit)
         }
     } else {
-        // Neither --branch nor --commit specified.
-        eprintln!("You must specify either a branch to compare (--branch) or a commit to compare (--commit) along with a comparison target (--previous).");
-        process::exit(1);
+        // Commit comparison logic (--commit is guaranteed to be Some here, 
+        // and --previous is also guaranteed to be Some due to the check above)
+        let commit_to_compare = args.commit.unwrap(); // Safe due to initial check
+        match args.previous.unwrap() { // Safe due to initial check
+            Some(prev_commit_hash) => {
+                // -p <hash> provided: Compare commit_to_compare with prev_commit_hash
+                println!(
+                    "Comparing specified commit {} with previous commit {}.",
+                    short_hash(&commit_to_compare),
+                    short_hash(&prev_commit_hash)
+                );
+                (prev_commit_hash, commit_to_compare)
+            }
+            None => {
+                // -p flag provided without value: Compare commit_to_compare with its parent
+                let parent_commit = git_ops.get_previous_commit(&commit_to_compare)?;
+                println!(
+                    "Comparing specified commit {} with its parent commit {}.",
+                    short_hash(&commit_to_compare),
+                    short_hash(&parent_commit)
+                );
+                (parent_commit, commit_to_compare)
+            }
+        }
     };
     
     // Set output file or default

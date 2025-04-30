@@ -40,13 +40,27 @@ The compiled binary will be available at `target/release/repodiff.exe` (Windows)
 
 ## Usage
 
-### Compare Latest Commit with Another Branch
+### Compare Branches
 
-To compare the latest commit in the current branch with the latest common commit in another branch:
+To compare the latest commit on the current branch (`HEAD`) with the latest commit on another branch (`<target_branch>`):
 
 ```bash
-repodiff -b main -o output.txt
+# Default: Compare HEAD with <target_branch>'s HEAD
+repodiff -b <target_branch> -o output.txt
 ```
+
+This shows all changes on the current branch since it diverged from the target branch, *plus* any changes that occurred on the target branch after the divergence point.
+
+To compare the latest commit on the current branch (`HEAD`) with the *common ancestor* (merge-base) commit between the current branch and the target branch:
+
+```bash
+# Use --merge-base: Compare HEAD with the merge-base of HEAD and <target_branch>
+repodiff -b <target_branch> --merge-base -o output.txt
+# Short flag equivalent:
+repodiff -b <target_branch> -a -o output.txt 
+```
+
+This is often more useful for reviewing changes specific to the current branch, as it excludes changes made on the target branch after the branches diverged.
 
 ### Compare Two Specific Commits
 
@@ -65,10 +79,11 @@ repodiff -c <commit_hash> -p -o output.txt
 ```
 
 Parameters:
-* `-b`, `--branch`: Branch to compare the current branch's latest commit against (finds the common ancestor).
-* `-c`, `--commit`: The newer commit hash to include in the comparison.
+* `-b`, `--branch <target_branch>`: Specify the target branch for comparison. By default, compares the current branch's `HEAD` with the `<target_branch>`'s `HEAD`. Use with `--merge-base` to compare against the common ancestor instead.
+* `-a`, `--merge-base`: When used with `-b`, compare the current branch's `HEAD` against the common ancestor (merge-base) commit of the current branch and the `<target_branch>`, instead of the `<target_branch>`'s `HEAD`.
+* `-c`, `--commit <commit_hash>`: The newer commit hash to include in the comparison.
 * `-p`, `--previous [PREVIOUS_COMMIT_HASH]`: Compare the commit specified by `-c` with a previous commit. If `PREVIOUS_COMMIT_HASH` is provided, compare against that specific hash. If omitted, compare against the parent of the commit specified by `-c`.
-* `-o`, `--output_file`: (Optional) Path to the output file. If not provided, the diff will be written to `repodiff_output.txt` in the current directory.
+* `-o`, `--output_file <path>`: (Optional) Path to the output file. If not provided, the diff will be written to `repodiff_output.txt` in the current directory.
 * `-v`, `--version`: Display the current version of RepoDiff
 * `-h`, `--help`: Print help information
 

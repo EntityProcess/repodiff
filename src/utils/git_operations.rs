@@ -60,26 +60,48 @@ impl GitOperations {
         Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
     }
 
-    /// Get the latest common commit between the current branch and base branch
+    /// Find the merge base commit between the current branch (HEAD) and a target branch
     ///
     /// # Arguments
     ///
-    /// * `branch` - The name of the base branch to compare with
-    pub fn get_latest_common_commit_with_branch(&self, branch: &str) -> Result<String> {
+    /// * `branch` - The name of the target branch to find the common ancestor with
+    pub fn find_merge_base(&self, branch: &str) -> Result<String> {
         let output = Command::new("git")
             .args(["merge-base", "HEAD", branch])
             .output()
             .map_err(|e| {
                 RepoDiffError::GitError(format!(
-                    "Failed to get latest common commit with '{}': {}",
+                    "Failed to find merge base with branch '{}': {}",
                     branch, e
                 ))
             })?;
 
         if !output.status.success() {
             return Err(RepoDiffError::GitError(format!(
-                "Failed to get latest common commit with '{}': {}",
+                "Failed to find merge base with branch '{}': {}",
                 branch,
+                String::from_utf8_lossy(&output.stderr)
+            )));
+        }
+
+        Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
+    }
+
+    /// Get the latest commit hash for a specific branch
+    ///
+    /// # Arguments
+    ///
+    /// * `branch_name` - The name of the branch
+    pub fn get_branch_head(&self, branch_name: &str) -> Result<String> {
+        let output = Command::new("git")
+            .args(["rev-parse", branch_name])
+            .output()
+            .map_err(|e| RepoDiffError::GitError(format!("Failed to get HEAD for branch '{}': {}", branch_name, e)))?;
+
+        if !output.status.success() {
+            return Err(RepoDiffError::GitError(format!(
+                "Failed to get HEAD for branch '{}': {}",
+                branch_name,
                 String::from_utf8_lossy(&output.stderr)
             )));
         }

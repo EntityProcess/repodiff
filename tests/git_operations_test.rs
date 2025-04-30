@@ -138,7 +138,7 @@ fn test_get_latest_commit() {
 
 #[test]
 #[ignore] // Ignore by default as it requires git to be installed
-fn test_get_latest_common_commit_with_branch() {
+fn test_find_merge_base() {
     let temp_dir = setup_test_repo();
     let repo_path = temp_dir.path();
     
@@ -196,14 +196,14 @@ fn test_get_latest_common_commit_with_branch() {
         .output()
         .expect("Failed to commit on main");
     
-    // Test the get_latest_common_commit_with_branch function
+    // Test the find_merge_base function
     let git_operations = GitOperations::new();
     
     // Change to the repo directory for the test
     let current_dir = std::env::current_dir().unwrap();
     std::env::set_current_dir(repo_path).unwrap();
     
-    let ancestor = git_operations.get_latest_common_commit_with_branch("test-branch").unwrap();
+    let ancestor = git_operations.find_merge_base("test-branch").unwrap();
     
     // Change back to the original directory
     std::env::set_current_dir(current_dir).unwrap();
