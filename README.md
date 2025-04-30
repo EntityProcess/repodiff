@@ -50,22 +50,25 @@ repodiff -b main -o output.txt
 
 ### Compare Two Specific Commits
 
+To compare a specific commit with an earlier commit:
+
 ```bash
-repodiff -c abc1234 -d 5678def -o output.txt
+repodiff -c <newer_commit_hash> -p <earlier_commit_hash> -o output.txt
 ```
 
 ### Compare a Commit with its Parent (Previous) Commit
 
+To compare a specific commit with its direct parent:
+
 ```bash
-repodiff -c abc1234 -p -o output.txt
+repodiff -c <commit_hash> -p -o output.txt
 ```
 
 Parameters:
-* `-b`, `--branch`: Branch to compare with (e.g., `main` or `master`)
-* `-c`, `--commit1`: First commit hash
-* `-d`, `--commit2`: Second commit hash
-* `-p`, `--previous`: Compare the specified commit (via `-c`) with its parent commit
-* `-o`, `--output_file`: (Optional) Path to the output file. If not provided, the diff will be written to a default file in the system's temporary directory.
+* `-b`, `--branch`: Branch to compare the current branch's latest commit against (finds the common ancestor).
+* `-c`, `--commit`: The newer commit hash to include in the comparison.
+* `-p`, `--previous [PREVIOUS_COMMIT_HASH]`: Compare the commit specified by `-c` with a previous commit. If `PREVIOUS_COMMIT_HASH` is provided, compare against that specific hash. If omitted, compare against the parent of the commit specified by `-c`.
+* `-o`, `--output_file`: (Optional) Path to the output file. If not provided, the diff will be written to `repodiff_output.txt` in the current directory.
 * `-v`, `--version`: Display the current version of RepoDiff
 * `-h`, `--help`: Print help information
 
