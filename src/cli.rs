@@ -77,8 +77,7 @@ pub fn run() -> Result<()> {
     let output_file = if let Some(output_file) = args.output_file {
         output_file
     } else {
-        let default_output = RepoDiff::get_default_output_file();
-        println!("No output file specified. Using temporary directory: {}", default_output);
+        let default_output = "repodiff_output.txt".to_string(); // Default filename in the working directory
         default_output
     };
     

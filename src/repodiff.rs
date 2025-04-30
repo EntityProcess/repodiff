@@ -77,13 +77,4 @@ impl RepoDiff {
         
         Ok(token_count)
     }
-    
-    /// Get the default output file path in the temporary directory
-    pub fn get_default_output_file() -> String {
-        let temp_dir = std::env::temp_dir();
-        let output_dir = temp_dir.join("repodiff");
-        let output_file = output_dir.join("repodiff_output.txt");
-        
-        output_file.to_string_lossy().to_string()
-    }
 } 
